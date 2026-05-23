@@ -10,6 +10,7 @@ const LINKS: ReadonlyArray<{ href: string; label: string }> = [
   { href: "/graph", label: "Graph" },
   { href: "/civilization", label: "Civilizations" },
   { href: "/era", label: "Eras" },
+  { href: "/random", label: "Random" },
 ];
 
 export function SiteNav() {
