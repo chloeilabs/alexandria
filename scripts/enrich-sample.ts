@@ -4,7 +4,7 @@
  * Useful for prompt calibration and for the demo when the bulk pipeline
  * isn't running yet.
  *
- * Requires ANTHROPIC_API_KEY in .env.local.
+ * Requires AI_GATEWAY_API_KEY in .env.local.
  *
  * Usage:
  *   pnpm tsx scripts/enrich-sample.ts

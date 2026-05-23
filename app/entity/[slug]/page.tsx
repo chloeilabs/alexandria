@@ -14,10 +14,21 @@ export async function generateMetadata({
   const { slug } = await params;
   const data = await getEntityBySlug(slug);
   if (!data) return { title: "Not found" };
+  const description =
+    data.entity.summary?.slice(0, 160) ?? `Read about ${data.entity.name}.`;
   return {
     title: `${data.entity.name} · The Library of Alexandria`,
-    description:
-      data.entity.summary?.slice(0, 160) ?? `Read about ${data.entity.name}.`,
+    description,
+    openGraph: {
+      title: data.entity.name,
+      description,
+      type: "article",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: data.entity.name,
+      description,
+    },
   };
 }
 

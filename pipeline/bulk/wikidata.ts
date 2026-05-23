@@ -525,17 +525,28 @@ export function getName(
 }
 
 /**
- * Slugify a name for URL use. Falls back to QID if name yields empty slug
- * (non-Latin scripts).
+ * Bare slug: lowercase, ASCII, dash-separated, capped at 80 chars.
+ * Empty string for names that yield nothing (pure non-Latin scripts).
  */
-export function makeSlug(name: string, qid: string): string {
-  const base = name
+export function baseSlug(name: string): string {
+  return name
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
+}
+
+/**
+ * Always-unique slug for use at insert time. Pairs the base slug with
+ * the QID so collisions are impossible at insert. The rebuild-slugs
+ * script later promotes uncontested base slugs to their bare form
+ * (e.g., "julius-caesar-q1048" → "julius-caesar"); contested ones keep
+ * the QID suffix.
+ */
+export function makeSlug(name: string, qid: string): string {
+  const base = baseSlug(name);
   return base ? `${base}-${qid.toLowerCase()}` : qid.toLowerCase();
 }
 

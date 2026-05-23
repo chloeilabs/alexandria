@@ -45,4 +45,11 @@
     background: var(--color-accent);
     color: var(--color-accent-foreground);
   }
+
+  /* Search result snippet highlighting (ts_headline emits <mark>) */
+  .search-snippet mark {
+    background: transparent;
+    color: var(--color-accent);
+    font-style: italic;
+  }
 }
