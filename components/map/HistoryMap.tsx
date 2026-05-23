@@ -5,7 +5,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { MapMarker } from "@/lib/db/queries/map";
-import { color } from "@/lib/colors";
+import { color, colorHex } from "@/lib/colors";
 import { fmtYear } from "@/lib/format";
 
 interface Props {
@@ -22,7 +22,8 @@ export function HistoryMap({ markers }: Props) {
 
     const accent = color("accent");
     const muted = color("muted");
-    const bg = color("background");
+    // MapLibre's style spec rejects oklch/lab/lch — must be hex/rgb/hsl.
+    const bg = colorHex("background");
 
     const style: maplibregl.StyleSpecification = {
       version: 8,

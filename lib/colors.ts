@@ -32,6 +32,29 @@ export function color(role: ColorRole): string {
 }
 
 /**
+ * Like `color()` but returns a guaranteed `#rrggbb` hex string. Use for
+ * libraries that can't parse modern color formats (oklch / lab / lch /
+ * hwb / color-mix) — most notably MapLibre's style spec, which has its
+ * own non-browser color parser stuck on hex/rgb/hsl/named.
+ *
+ * Round-trips the resolved color through a 1×1 canvas, which gives us
+ * the browser's authoritative RGB regardless of the original syntax.
+ */
+export function colorHex(role: ColorRole): string {
+  if (typeof window === "undefined") return FALLBACKS[role];
+  const ctx = document.createElement("canvas").getContext("2d");
+  if (!ctx) return FALLBACKS[role];
+  ctx.fillStyle = color(role);
+  ctx.fillRect(0, 0, 1, 1);
+  const data = ctx.getImageData(0, 0, 1, 1).data;
+  const r = data[0] ?? 0;
+  const g = data[1] ?? 0;
+  const b = data[2] ?? 0;
+  const hex = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${hex(r)}${hex(g)}${hex(b)}`;
+}
+
+/**
  * Stable HSL/OKLCH hue per string (e.g., civilizational tag). Used by
  * the graph to color clusters consistently across renders.
  */
