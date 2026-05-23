@@ -53,7 +53,7 @@ const RELATED_CAP = 12;
 export async function getEntityBySlug(
   slug: string,
 ): Promise<EntityPageData | null> {
-  return withRetry(`getEntityBySlug(${slug})`, () => getEntityBySlugInner(slug));
+  return withRetry("getEntityBySlug", () => getEntityBySlugInner(slug));
 }
 
 async function getEntityBySlugInner(

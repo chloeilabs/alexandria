@@ -90,9 +90,11 @@ export interface RetryOptions {
 /**
  * Run a DB call with retry on transient connection errors.
  *
- * Backoff schedule with defaults: ~80ms, ~240ms, ~720ms (plus 0-50ms jitter).
- * Total worst-case latency before giving up: ~1s, which fits Neon's typical
- * cold-start window without ballooning request times when the DB is healthy.
+ * Backoff schedule with defaults (attempts = 3 → 2 sleeps between 3 tries):
+ * ~80ms + ~240ms (each plus 0–49ms jitter), worst case ~420ms of sleep
+ * before giving up. Each attempt also waits on its own connect/query
+ * timeout, so the end-to-end deadline covers a Neon cold start of 1–2s
+ * once you include the in-flight connect on each try.
  *
  * @param label  Short identifier for logs (usually the calling function name).
  * @param fn     The DB call to execute.
