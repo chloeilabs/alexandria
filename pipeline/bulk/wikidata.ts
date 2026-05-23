@@ -148,6 +148,10 @@ export const TYPE_WHITELIST = new Map<string, EntityType>([
   ["Q3839081", "event"], // disaster
   ["Q41397", "event"], // genocide
   ["Q15275719", "event"], // recurring event
+  ["Q1190554", "event"], // occurrence
+  ["Q13418847", "event"], // historical event
+  ["Q12184", "event"], // pandemic
+  ["Q3241045", "event"], // epidemic
 
   // --- organization ---
   ["Q43229", "organization"], // organization
@@ -199,6 +203,11 @@ export const TYPE_WHITELIST = new Map<string, EntityType>([
   ["Q11471", "concept"], // technology
   ["Q1183543", "concept"], // device
   ["Q2424752", "concept"], // product
+  ["Q11042", "concept"], // culture
+  ["Q42883", "concept"], // culture (alt)
+  ["Q105648", "place"], // civilization
+  ["Q1138571", "place"], // trade route
+  ["Q44512", "concept"], // disease
 ]);
 
 /**

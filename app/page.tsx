@@ -23,11 +23,19 @@ export default async function Home() {
           A living digital encyclopedia of human civilization. Begin anywhere;
           follow the threads.
         </p>
-        <p className="mt-8 font-mono text-xs uppercase tracking-[0.2em] text-accent">
-          {hasContent
-            ? `${entities.length} entries seeded`
-            : "Awaiting the seed"}
-        </p>
+        <div className="mt-10 flex items-baseline gap-8">
+          <Link
+            href="/search"
+            className="font-mono text-xs uppercase tracking-[0.2em] text-accent hover:text-foreground transition-colors"
+          >
+            Search →
+          </Link>
+          <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            {hasContent
+              ? `${entities.length} entries seeded`
+              : "Awaiting the seed"}
+          </span>
+        </div>
       </section>
 
       {hasContent && (
