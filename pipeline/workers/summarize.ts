@@ -1,22 +1,21 @@
-// Tier 0 → Tier 1 worker: fetches Wikipedia source, runs the summarize
-// prompt against Haiku, persists the result.
+// Tier 0 → Tier 1 worker via AI Gateway (DECISIONS.md, 2026-05-22).
 //
 // Idempotent: if an entity is already at Tier 1+, returns "skipped".
 // Budget-gated: every call estimates cost and aborts if DAILY_BUDGET_USD
 // would be breached.
 
 import "dotenv/config";
+import { generateText } from "ai";
 import { eq } from "drizzle-orm";
 
 import { db } from "../../lib/db";
 import { entities, pipelineRuns, sources } from "../../lib/db/schema";
 import {
-  MODEL_HAIKU,
-  claude,
+  MODEL_FLASH,
   estimateCostUsd,
   roughTokensFromChars,
-} from "../../lib/claude";
-import { summarizePrompt } from "../../lib/claude/prompts/summarize";
+} from "../../lib/ai";
+import { summarizePrompt } from "../../lib/ai/prompts/summarize";
 import { fetchPlaintext } from "../../lib/wikipedia";
 import { checkBudget } from "../budget";
 
@@ -24,11 +23,7 @@ const WIKIPEDIA_LEAD_CHAR_BUDGET = 3000;
 
 export interface SummarizeResult {
   qid: string;
-  status:
-    | "ok"
-    | "no_source" // Wikipedia didn't return an article
-    | "already_done" // Entity already at Tier 1+
-    | "not_found"; // QID isn't in our DB
+  status: "ok" | "no_source" | "already_done" | "not_found";
   summary?: string;
   costUsd?: number;
   inputTokens?: number;
@@ -52,8 +47,6 @@ export async function summarizeEntity(qid: string): Promise<SummarizeResult> {
     return { qid, status: "no_source" };
   }
 
-  // Persist the source first — even if Claude fails, we keep the text
-  // for retries and for the eventual Tier 2 narrate job.
   await db
     .insert(sources)
     .values({
@@ -79,39 +72,27 @@ export async function summarizeEntity(qid: string): Promise<SummarizeResult> {
 
   // Budget guard — estimate before the call.
   const estimatedInputTokens = roughTokensFromChars(
-    (params.system as string).length +
-      intro.length +
-      entity.name.length +
-      120,
+    params.system.length + params.prompt.length,
   );
-  const estimatedOutputTokens = params.max_tokens;
   const estimatedCost = estimateCostUsd(
-    MODEL_HAIKU,
+    MODEL_FLASH,
     estimatedInputTokens,
-    estimatedOutputTokens,
+    params.maxOutputTokens,
   );
   await checkBudget(estimatedCost);
 
   const t0 = Date.now();
-  const response = await claude.messages.create(params);
+  const result = await generateText(params);
 
-  const summary = response.content
-    .map((b) => (b.type === "text" ? b.text : ""))
-    .filter((s) => s.length > 0)
-    .join("\n\n")
-    .trim();
-
+  const summary = result.text.trim();
   if (!summary) {
-    throw new Error(`Claude returned no text for ${qid}`);
+    throw new Error(`AI Gateway returned no text for ${qid}`);
   }
 
-  const actualCost = estimateCostUsd(
-    MODEL_HAIKU,
-    response.usage.input_tokens,
-    response.usage.output_tokens,
-  );
+  const inputTokens = result.usage.inputTokens ?? 0;
+  const outputTokens = result.usage.outputTokens ?? 0;
+  const actualCost = estimateCostUsd(MODEL_FLASH, inputTokens, outputTokens);
 
-  // Persist summary + tier upgrade + log spend, all in one transaction.
   await db.transaction(async (tx) => {
     await tx
       .update(entities)
@@ -147,7 +128,7 @@ export async function summarizeEntity(qid: string): Promise<SummarizeResult> {
     status: "ok",
     summary,
     costUsd: actualCost,
-    inputTokens: response.usage.input_tokens,
-    outputTokens: response.usage.output_tokens,
+    inputTokens,
+    outputTokens,
   };
 }

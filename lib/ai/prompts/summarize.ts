@@ -1,13 +1,11 @@
 // Tier 0 → Tier 1 prompt: 150-300 word summary in our voice.
-// Cheap (Haiku). Single-source (Wikipedia lead). Locked after calibration
-// against the 10 calibration entities — DO NOT edit without re-running them.
+// Returns args ready to pass directly to ai-sdk `generateText`.
 
-import type { MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resources/messages";
-import { MODEL_HAIKU } from "../index";
+import { MODEL_FLASH } from "../index";
 
 export interface SummarizeInput {
   name: string;
-  type: string; // person | place | event | organization | work | concept
+  type: string;
   dateStart: number | null;
   dateEnd: number | null;
   wikipediaIntro: string;
@@ -33,19 +31,14 @@ function formatDateRange(start: number | null, end: number | null): string {
   return end == null ? fmt(start) : `${fmt(start)}–${fmt(end)}`;
 }
 
-export function summarizePrompt(
-  input: SummarizeInput,
-): MessageCreateParamsNonStreaming {
+export function summarizePrompt(input: SummarizeInput) {
   const dr = formatDateRange(input.dateStart, input.dateEnd);
   const datesLine = dr ? `\nDates: ${dr}` : "";
   return {
-    model: MODEL_HAIKU,
-    max_tokens: 600,
+    model: MODEL_FLASH,
+    maxOutputTokens: 600,
     system: SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: `Subject: ${input.name}${datesLine}
+    prompt: `Subject: ${input.name}${datesLine}
 Type: ${input.type}
 
 Wikipedia lead section (CC BY-SA, treat as factual source — paraphrase, do not quote):
@@ -54,7 +47,5 @@ ${input.wikipediaIntro}
 </source>
 
 Write the 150-300 word summary now. Begin directly with the prose — no preamble, no "Here is the summary", nothing.`,
-      },
-    ],
   };
 }

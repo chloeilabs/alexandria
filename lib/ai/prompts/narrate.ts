@@ -1,13 +1,7 @@
 // Tier 1 → Tier 2 prompt: 800-1500 word multi-source synthesis.
-// Sonnet 4.6. Multi-source = Wikipedia + 1911 Britannica + (optionally)
-// other public-domain sources. The blend is what makes the output ours
-// rather than a Wikipedia paraphrase — see DECISIONS.md.
-//
-// This prompt is LOCKED after calibration on the 10 calibration entities.
-// Any edit must be followed by a re-run against those 10 + a manual review.
+// Returns args ready to pass to ai-sdk `generateText`.
 
-import type { MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resources/messages";
-import { MODEL_SONNET } from "../index";
+import { MODEL_FLASH } from "../index";
 
 export interface NarrateSource {
   kind: "wikipedia" | "britannica_1911" | "sep" | "other";
@@ -20,14 +14,8 @@ export interface NarrateInput {
   type: string;
   dateStart: number | null;
   dateEnd: number | null;
-  /** At least one source is required. */
   sources: NarrateSource[];
-  /** Optional structured Wikidata facts the model should weave in. */
   facts?: Record<string, string | number | null>;
-  /**
-   * Optional exemplar paragraphs from Tier 3 work to anchor the voice.
-   * 1-3 paragraphs, no headings.
-   */
   styleExamples?: string[];
 }
 
@@ -92,9 +80,7 @@ function fmtStyle(examples: string[] | undefined): string {
   return `<style_examples>\n${block}\n</style_examples>\n\n`;
 }
 
-export function narratePrompt(
-  input: NarrateInput,
-): MessageCreateParamsNonStreaming {
+export function narratePrompt(input: NarrateInput) {
   if (input.sources.length === 0) {
     throw new Error("narratePrompt requires at least one source");
   }
@@ -102,13 +88,10 @@ export function narratePrompt(
   const datesLine = dr ? `\nDates: ${dr}` : "";
 
   return {
-    model: MODEL_SONNET,
-    max_tokens: 2500,
+    model: MODEL_FLASH,
+    maxOutputTokens: 2500,
     system: SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: `Subject: ${input.name}${datesLine}
+    prompt: `Subject: ${input.name}${datesLine}
 Type: ${input.type}
 
 ${fmtStyle(input.styleExamples)}${fmtFacts(input.facts)}<sources>
@@ -116,7 +99,5 @@ ${fmtSources(input.sources)}
 </sources>
 
 Write the 800-1500 word narrative now. Begin directly with the prose. No preamble.`,
-      },
-    ],
   };
 }

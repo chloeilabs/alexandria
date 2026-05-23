@@ -96,6 +96,26 @@ Theme colors live in `app/globals.css` under `@theme`, defined in OKLCH. No `tai
 
 ---
 
+## 2026-05-22 — AI Gateway (Vercel) + Gemini 3.5 Flash, NOT Anthropic SDK
+
+The brief specified Anthropic SDK + Claude models (Haiku 4.5 / Sonnet 4.6 / Opus 4.7). Switched to Vercel AI Gateway + `google/gemini-3.5-flash` as the unified default model. Reasoning:
+
+- **Cost.** Gemini 3.5 Flash: $1.50/M in, $9/M out vs Sonnet 4.6's $3/$15. At 5M Tier 0 → 200K Tier 1 → 50K Tier 2 the savings compound meaningfully — roughly half the bill on Tier 1, similar shape on Tier 2.
+- **Context window.** 1M tokens on Flash means multi-source synthesis (Wikipedia + Britannica 1911 + …) for Tier 2 fits comfortably without truncation.
+- **One key, many providers.** AI Gateway is the default global provider in `ai`; switching the model is a one-string change in `lib/ai/index.ts`. Future swaps (e.g., to a Gemini Pro for the curated tier, or back to Claude for specific entities) cost almost nothing.
+
+Migration details:
+- Removed `@anthropic-ai/sdk` from deps; added `ai@6` and `zod`.
+- `lib/claude/` → `lib/ai/` (provider-agnostic naming).
+- Prompt modules return `generateText`-shaped args (`maxOutputTokens` not `max_tokens`).
+- Fact-check uses `Output.object({ schema: z.object(...) })` instead of forced tool-use.
+- Budget tracker continues to estimate per-call USD before the call; pricing constants for Gemini 3.5 Flash fetched from the AI Gateway model listing on 2026-05-22.
+- Env var `ANTHROPIC_API_KEY` → `AI_GATEWAY_API_KEY`.
+
+**Reconsider if:** Gemini Flash falls short on the calibration set (the 10 calibration entities — Hannibal, Mansa Musa, Wu Zetian, etc.). Then swap `MODEL_FLASH` in `lib/ai/index.ts` to `google/gemini-3.5-pro` or `anthropic/claude-sonnet-4.5` and re-run calibration. No other code changes required.
+
+---
+
 ## 2026-05-22 — Explicit scope deferrals (NOT day-one)
 
 The following are explicitly deferred. Each is mentioned in the brief's roadmap with a target month.

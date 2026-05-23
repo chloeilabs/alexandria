@@ -31,7 +31,8 @@ docker compose up -d postgres
 
 # 3. Create your local env file
 cp .env.example .env.local
-# Then fill in ANTHROPIC_API_KEY in .env.local
+# Then fill in AI_GATEWAY_API_KEY in .env.local
+# (https://vercel.com/[team]/~/ai-gateway/api-keys)
 
 # 4. Generate and apply the initial schema
 pnpm db:generate
@@ -75,7 +76,7 @@ High level:
 - **Graph**: `react-force-graph-2d` (Canvas/WebGL — never renders the full corpus)
 - **Timeline**: Canvas-based with D3 scales + level-of-detail aggregation
 - **Database**: Postgres 17 with pgvector for embeddings, `pg-boss` for the job queue (same DB)
-- **AI**: Anthropic SDK — Haiku 4.5 for Tier 1 summaries, Sonnet 4.6 for Tier 2 multi-source narratives, Opus 4.7 for the curated tier
+- **AI**: Vercel AI Gateway routing to `google/gemini-3.5-flash` (1M-token context, $1.50/M input). Swap models in `lib/ai/index.ts`.
 - **Ingestion**: Streaming parsers for Wikidata JSON and Wikipedia XML bz2 dumps; matched by Wikidata QID
 
 ## Quality tiers
@@ -83,9 +84,9 @@ High level:
 Every entity sits at one of four tiers. The pipeline upgrades entities continuously.
 
 - **Tier 0** — Stub from Wikidata dump (name, dates, type, coordinates, relationships)
-- **Tier 1** — Summary (150-300 words, Haiku-rewritten Wikipedia lead)
-- **Tier 2** — Full narrative (800-1500 words, Sonnet-synthesized from Wikipedia + 1911 Britannica + other PD sources)
-- **Tier 3** — Editorially curated (Tier 2 + hand-picked imagery + custom map overlays + reviewed prose)
+- **Tier 1** — Summary (150-300 words, Flash-rewritten Wikipedia lead)
+- **Tier 2** — Full narrative (800-1500 words, Flash-synthesized from Wikipedia + 1911 Britannica + other PD sources)
+- **Tier 3** — Editorially curated (Tier 2 + hand-picked imagery + custom map overlays + reviewed prose; swap to Gemini Pro or Claude here if needed)
 
 ## What this isn't (yet)
 
