@@ -205,10 +205,14 @@ export async function getEntityBySlug(
     }));
   }
 
-  // Embedding-based "resonant" neighbours. Excludes the entity itself,
-  // skips ones we already showed under Connections (redundant), and pulls
-  // a couple extra from the cosine ANN query so the de-dup has slack.
-  const relatedQids = new Set(related.map((r) => r.entity.qid));
+  // Embedding-based "resonant" neighbours. Excludes the entity itself
+  // AND anything we already showed under Connections / More-from-region
+  // — those sections would otherwise duplicate names verbatim. Pull
+  // 20 from the ANN query so we have slack after de-dup.
+  const dedupQids = new Set<string>([
+    ...related.map((r) => r.entity.qid),
+    ...regionPeers.map((p) => p.qid),
+  ]);
   let similar: SimilarEntity[] = [];
   if (entity.embedding) {
     type SimRow = {
@@ -235,7 +239,7 @@ export async function getEntityBySlug(
       LIMIT 20
     `);
     similar = Array.from(rows)
-      .filter((r) => !relatedQids.has(r.qid))
+      .filter((r) => !dedupQids.has(r.qid))
       .slice(0, 6)
       .map((r) => ({
         qid: r.qid,

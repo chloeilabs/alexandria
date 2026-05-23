@@ -250,7 +250,7 @@ export function EntityPage({ data }: { data: EntityPageData }) {
               <li key={p.qid}>
                 <Link
                   href={`/entity/${p.slug}`}
-                  className="group flex items-baseline gap-3 flex-wrap focus:outline-none"
+                  className="group flex items-baseline gap-3 flex-wrap focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
                 >
                   <span className="font-display text-lg text-foreground group-hover:text-accent group-focus-visible:text-accent transition-colors">
                     {p.name}
@@ -271,14 +271,14 @@ export function EntityPage({ data }: { data: EntityPageData }) {
       {similar.length > 0 && (
         <section className="max-w-3xl mx-auto px-6 pt-16">
           <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-8 border-t border-border pt-8">
-            Resonant
+            Adjacent in spirit
           </h2>
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
             {similar.map((s) => (
               <li key={s.qid}>
                 <Link
                   href={`/entity/${s.slug}`}
-                  className="group flex items-baseline gap-3 flex-wrap focus:outline-none"
+                  className="group flex items-baseline gap-3 flex-wrap focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
                 >
                   <span className="font-display text-lg text-foreground group-hover:text-accent group-focus-visible:text-accent transition-colors">
                     {s.name}
