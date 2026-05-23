@@ -98,6 +98,7 @@ export function EntityPage({ data }: { data: EntityPageData }) {
     regionPeers,
     primaryTag,
     similar,
+    factCheck,
   } = data;
 
   const dateRange = fmtDateRange(
@@ -338,9 +339,30 @@ export function EntityPage({ data }: { data: EntityPageData }) {
       {/* Sources */}
       {sources.length > 0 && (
         <footer className="max-w-3xl mx-auto px-6 pt-16 mt-8">
-          <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-4 border-t border-border pt-8">
-            Sources
-          </h2>
+          <div className="flex items-baseline justify-between flex-wrap gap-x-6 gap-y-2 mb-4 border-t border-border pt-8">
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent">
+              Sources
+            </h2>
+            {factCheck && (
+              <span
+                className={
+                  "font-mono text-[10px] uppercase tracking-[0.18em] " +
+                  (factCheck.status === "clean"
+                    ? "text-muted-foreground/80"
+                    : "text-amber-500/80")
+                }
+                title={
+                  factCheck.status === "clean"
+                    ? "Fact-checked against the listed sources: no flagged claims."
+                    : `Fact-check flagged ${factCheck.flaggedClaims.length} claim${factCheck.flaggedClaims.length === 1 ? "" : "s"} the listed sources don't fully support.`
+                }
+              >
+                {factCheck.status === "clean"
+                  ? "✓ Fact-checked"
+                  : `⚠ ${factCheck.flaggedClaims.length} claim${factCheck.flaggedClaims.length === 1 ? "" : "s"} flagged`}
+              </span>
+            )}
+          </div>
           <ul className="space-y-2 font-mono text-[11px] text-muted-foreground">
             {sources.map((s) => (
               <li key={s.id} className="flex items-baseline gap-3 flex-wrap">
@@ -361,6 +383,23 @@ export function EntityPage({ data }: { data: EntityPageData }) {
               </li>
             ))}
           </ul>
+          {factCheck && factCheck.flaggedClaims.length > 0 && (
+            <details className="mt-6 group">
+              <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground hover:text-accent transition-colors">
+                Show flagged claims ({factCheck.flaggedClaims.length})
+              </summary>
+              <ul className="mt-4 space-y-3 text-sm leading-relaxed text-muted-foreground">
+                {factCheck.flaggedClaims.map((f, i) => (
+                  <li key={i} className="border-l-2 border-amber-500/40 pl-4">
+                    <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-amber-500/80 mb-1">
+                      {f.reason}
+                    </div>
+                    <div className="font-display italic">&ldquo;{f.claim}&rdquo;</div>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </footer>
       )}
     </article>

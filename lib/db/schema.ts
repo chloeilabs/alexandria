@@ -340,6 +340,57 @@ export const threadEntries = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Fact-check reviews — the plan's "tier_2_review" surface.
+// ---------------------------------------------------------------------------
+//
+// One row per (entity × model × run). A fresh fact-check supersedes the
+// previous one; we keep history for audit but the entity page reads the
+// most recent.
+
+export const factCheckReviews = pgTable(
+  "fact_check_reviews",
+  {
+    id: serial("id").primaryKey(),
+    entityQid: varchar("entity_qid", { length: 32 })
+      .notNull()
+      .references(() => entities.qid, { onDelete: "cascade" }),
+    /** "google/gemini-3.5-flash" etc. */
+    model: varchar("model", { length: 64 }).notNull(),
+    /** "clean" = no findings; "flagged" = findings present; "failed" = error. */
+    status: varchar("status", { length: 16 }).notNull(),
+    /** [{claim, reason, source_excerpt?}] — see lib/ai/prompts/fact-check.ts */
+    flaggedClaims: jsonb("flagged_claims"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("fact_check_reviews_entity_idx").on(t.entityQid),
+    index("fact_check_reviews_status_idx").on(t.status),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Featured cache — pre-computed homepage rotation, refreshed by Vercel cron.
+// ---------------------------------------------------------------------------
+//
+// A single-row table (we only ever care about the latest). The Vercel cron
+// endpoint at /api/cron/refresh-featured replaces this row with a fresh
+// featured set; getFeaturedEntities reads it back. Falls back to live
+// compute if the cache is missing or older than 36h.
+
+export const featuredCache = pgTable("featured_cache", {
+  id: serial("id").primaryKey(),
+  /** Array of FeaturedEntity objects — see lib/db/queries/entity.ts */
+  entities: jsonb("entities").notNull(),
+  /** Inputs used to generate this rotation, for debugging. */
+  meta: jsonb("meta"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
 // Type exports for application code
 // ---------------------------------------------------------------------------
 
@@ -356,3 +407,7 @@ export type Thread = typeof threads.$inferSelect;
 export type NewThread = typeof threads.$inferInsert;
 export type ThreadEntry = typeof threadEntries.$inferSelect;
 export type NewThreadEntry = typeof threadEntries.$inferInsert;
+export type FactCheckReview = typeof factCheckReviews.$inferSelect;
+export type NewFactCheckReview = typeof factCheckReviews.$inferInsert;
+export type FeaturedCache = typeof featuredCache.$inferSelect;
+export type NewFeaturedCache = typeof featuredCache.$inferInsert;

@@ -30,26 +30,26 @@ interface EraCount {
   n: number;
 }
 
-interface CivCount {
+type CivCount = {
   civ: string;
   n: number;
   min_year: number | null;
   max_year: number | null;
-}
+} & Record<string, unknown>;
 
-interface MatrixCell {
+type MatrixCell = {
   civ: string;
   era: string;
   n: number;
-}
+} & Record<string, unknown>;
 
-interface TierMix {
+type TierMix = {
   civ: string;
   tier0: number;
   tier1: number;
   tier2: number;
   tier3: number;
-}
+} & Record<string, unknown>;
 
 interface Report {
   generatedAt: string;

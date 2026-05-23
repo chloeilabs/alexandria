@@ -11,6 +11,8 @@ import {
   entities,
   entityAliases,
   entityRegions,
+  factCheckReviews,
+  featuredCache,
   media,
   relationships,
   sources,
@@ -43,6 +45,19 @@ export interface SimilarEntity {
   similarity: number;
 }
 
+export interface FactCheckFinding {
+  claim: string;
+  reason: "missing" | "contradicts" | "uncertain";
+  source_excerpt?: string;
+}
+
+export interface FactCheckSummary {
+  status: "clean" | "flagged" | "failed";
+  model: string;
+  createdAt: Date;
+  flaggedClaims: FactCheckFinding[];
+}
+
 export interface EntityPageData {
   entity: Entity;
   aliases: Array<{ alias: string; language: string }>;
@@ -65,6 +80,12 @@ export interface EntityPageData {
    * (e.g. "Mansa Musa" → "Sundiata Keïta" even without a P-property link).
    */
   similar: SimilarEntity[];
+  /**
+   * Most recent fact-check review for this entity, if any. Null when
+   * the entity has never been reviewed; otherwise the worker's status
+   * + flagged claims.
+   */
+  factCheck: FactCheckSummary | null;
 }
 
 const RELATED_CAP = 12;
@@ -260,6 +281,31 @@ async function getEntityBySlugInner(
       }));
   }
 
+  // Latest fact-check review for this entity, if any. Re-runs supersede
+  // previous reviews; we only surface the most recent.
+  const [fcRow] = await db
+    .select({
+      status: factCheckReviews.status,
+      model: factCheckReviews.model,
+      createdAt: factCheckReviews.createdAt,
+      flaggedClaims: factCheckReviews.flaggedClaims,
+    })
+    .from(factCheckReviews)
+    .where(eq(factCheckReviews.entityQid, entity.qid))
+    .orderBy(desc(factCheckReviews.createdAt))
+    .limit(1);
+
+  const factCheck = fcRow
+    ? ({
+        status: fcRow.status as "clean" | "flagged" | "failed",
+        model: fcRow.model,
+        createdAt: fcRow.createdAt,
+        flaggedClaims: Array.isArray(fcRow.flaggedClaims)
+          ? (fcRow.flaggedClaims as FactCheckFinding[])
+          : [],
+      } satisfies FactCheckSummary)
+    : null;
+
   return {
     entity,
     aliases: aliasRows,
@@ -270,6 +316,7 @@ async function getEntityBySlugInner(
     regionPeers,
     primaryTag,
     similar,
+    factCheck,
   };
 }
 
@@ -331,8 +378,46 @@ type FeaturedRow = {
  * Featured rotation: round-robin pick from civilizational tags so no
  * region appears more than `maxPerRegion` times. Prefer higher-tier
  * entities within each region. Returns ~`count` items.
+ *
+ * Reads from `featured_cache` if populated and < 36h old; otherwise
+ * falls back to live compute. The Vercel cron at
+ * /api/cron/refresh-featured replaces the cache nightly.
  */
 export async function getFeaturedEntities(
+  count = 12,
+  maxPerRegion = 2,
+): Promise<FeaturedEntity[]> {
+  // Try cache first. The cron writes a row each night; we keep only the
+  // most recent and consider it fresh for ~36h (so the site stays warm
+  // even if one cron run is missed).
+  try {
+    const [cached] = await withRetry("featured:read", () =>
+      db
+        .select({
+          entities: featuredCache.entities,
+          createdAt: featuredCache.createdAt,
+        })
+        .from(featuredCache)
+        .orderBy(desc(featuredCache.createdAt))
+        .limit(1),
+    );
+    if (cached) {
+      const ageMs = Date.now() - cached.createdAt.getTime();
+      if (ageMs < 36 * 60 * 60 * 1000 && Array.isArray(cached.entities)) {
+        return cached.entities as FeaturedEntity[];
+      }
+    }
+  } catch {
+    // Cache read failed — proceed with live compute.
+  }
+  return computeFeaturedEntities(count, maxPerRegion);
+}
+
+/**
+ * The actual rotation algorithm. Exported so the cron route can write
+ * its result to the cache.
+ */
+export async function computeFeaturedEntities(
   count = 12,
   maxPerRegion = 2,
 ): Promise<FeaturedEntity[]> {
