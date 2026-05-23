@@ -154,9 +154,10 @@ export const relationships = pgTable(
     sourceQid: varchar("source_qid", { length: 32 })
       .notNull()
       .references(() => entities.qid, { onDelete: "cascade" }),
-    targetQid: varchar("target_qid", { length: 32 })
-      .notNull()
-      .references(() => entities.qid, { onDelete: "cascade" }),
+    // No FK on target_qid: during bulk seed, the target entity may not have
+    // been ingested yet (or may have been filtered out by the seed filter).
+    // Orphan relationships are tolerated; a periodic worker cleans them up.
+    targetQid: varchar("target_qid", { length: 32 }).notNull(),
     // Wikidata property: P22 (father), P39 (position-held), P361 (part-of), ...
     predicate: varchar("predicate", { length: 16 }).notNull(),
     // Time-bounded relationships and other qualifiers
