@@ -20,8 +20,8 @@ export default async function MapRoute() {
         </span>
       </header>
       <p className="max-w-2xl mx-auto px-6 pb-6 font-display italic text-muted-foreground text-center text-lg">
-        Each pin marks an entry with known coordinates. Hover for context,
-        click to enter.
+        Each pin marks an entry with known coordinates. Toggle the empires
+        panel to see their territorial peaks washed across the world.
       </p>
       <div className="flex-1 min-h-[640px] border-t border-border">
         <HistoryMap markers={markers} />

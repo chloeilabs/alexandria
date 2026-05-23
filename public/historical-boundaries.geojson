@@ -1,0 +1,164 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "_comment": "Simplified historical empire boundaries at peak extent. Hand-authored from atlas references; ~12-18 vertices each, accurate enough for world-zoom visual indication, not for cartographic measurement. License: CC0 — these are not derived from any copyrighted dataset; they are original simplifications.",
+    "_authoring_notes": "Coordinates are [lng, lat]. Polygons trace clockwise. Peaks chosen as the year of maximum territorial extent per standard reference (Britannica, mainstream historiography)."
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "roman",
+        "name": "Roman Empire",
+        "peak_year": 117,
+        "peak_label": "117 CE (Trajan)",
+        "slug": "roman-empire"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-9, 37], [-5, 35], [10, 32], [25, 31], [33, 29], [38, 31],
+          [44, 36], [42, 40], [40, 42], [35, 41], [29, 42], [25, 43],
+          [18, 46], [12, 47], [8, 49], [3, 51], [-2, 53], [-5, 55],
+          [-3, 53], [-5, 50], [-1, 49], [-5, 44], [-9, 43], [-9, 37]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "han",
+        "name": "Han Dynasty",
+        "peak_year": 100,
+        "peak_label": "100 CE",
+        "slug": "han-dynasty"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [76, 40], [80, 42], [88, 44], [95, 44], [100, 43], [108, 42],
+          [115, 42], [122, 41], [124, 40], [122, 35], [121, 30], [120, 28],
+          [117, 24], [113, 22], [108, 21], [103, 25], [100, 22], [98, 25],
+          [97, 28], [92, 28], [86, 32], [80, 36], [76, 40]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mongol",
+        "name": "Mongol Empire",
+        "peak_year": 1279,
+        "peak_label": "1279 CE (Kublai Khan)",
+        "slug": "mongol-empire"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [29, 49], [40, 55], [55, 60], [70, 60], [90, 58], [110, 53],
+          [125, 50], [130, 45], [125, 40], [122, 35], [120, 30], [115, 27],
+          [108, 24], [100, 22], [97, 28], [88, 30], [82, 30], [75, 32],
+          [70, 30], [62, 32], [55, 35], [50, 38], [44, 42], [38, 46],
+          [32, 48], [29, 49]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "songhai",
+        "name": "Songhai Empire",
+        "peak_year": 1500,
+        "peak_label": "1500 CE (Askia the Great)",
+        "slug": "songhai-empire"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-16, 12], [-12, 16], [-8, 18], [-2, 20], [4, 19], [8, 18],
+          [12, 16], [14, 14], [12, 11], [8, 10], [4, 11], [0, 10],
+          [-4, 11], [-8, 11], [-12, 11], [-15, 11], [-16, 12]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "inca",
+        "name": "Inca Empire",
+        "peak_year": 1530,
+        "peak_label": "1530 CE (Huayna Capac)",
+        "slug": "inca-empire"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-78, 1], [-76, -2], [-74, -8], [-71, -13], [-69, -16],
+          [-67, -19], [-66, -22], [-68, -27], [-71, -33], [-72, -36],
+          [-71, -33], [-72, -28], [-74, -22], [-76, -16], [-78, -10],
+          [-79, -5], [-79, -1], [-78, 1]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "maurya",
+        "name": "Maurya Empire",
+        "peak_year": -250,
+        "peak_label": "250 BCE (Ashoka)",
+        "slug": "maurya-empire"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [66, 34], [70, 36], [74, 35], [78, 33], [82, 30], [86, 27],
+          [90, 26], [92, 24], [92, 21], [88, 21], [85, 19], [82, 15],
+          [80, 12], [77, 9], [76, 12], [73, 17], [70, 22], [68, 26],
+          [66, 30], [66, 34]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "ottoman",
+        "name": "Ottoman Empire",
+        "peak_year": 1683,
+        "peak_label": "1683 CE (Mehmed IV)",
+        "slug": "ottoman-empire"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [15, 36], [20, 38], [22, 42], [25, 46], [27, 48], [30, 48],
+          [32, 46], [35, 48], [40, 46], [44, 42], [46, 38], [48, 34],
+          [47, 30], [44, 27], [42, 24], [40, 21], [38, 17], [42, 15],
+          [44, 13], [48, 12], [50, 14], [45, 17], [40, 19], [37, 22],
+          [33, 27], [30, 29], [26, 31], [22, 32], [15, 32], [10, 33],
+          [11, 35], [15, 36]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "achaemenid",
+        "name": "Achaemenid Empire",
+        "peak_year": -500,
+        "peak_label": "500 BCE (Darius I)",
+        "slug": "achaemenid-empire"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [22, 32], [26, 40], [32, 42], [38, 42], [44, 43], [50, 42],
+          [58, 41], [64, 39], [70, 37], [72, 34], [70, 30], [66, 28],
+          [64, 25], [60, 24], [56, 25], [52, 28], [50, 26], [46, 24],
+          [44, 22], [40, 21], [36, 20], [32, 22], [30, 24], [28, 27],
+          [26, 30], [22, 32]
+        ]]
+      }
+    }
+  ]
+}
