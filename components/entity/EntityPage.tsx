@@ -89,6 +89,7 @@ export function EntityPage({ data }: { data: EntityPageData }) {
     media,
     regionPeers,
     primaryTag,
+    similar,
   } = data;
 
   const dateRange = fmtDateRange(
@@ -257,6 +258,34 @@ export function EntityPage({ data }: { data: EntityPageData }) {
                   {p.dateStart != null && (
                     <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                       {fmtYear(p.dateStart, p.dateStartPrecision)}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Resonant entries — embedding cosine neighbours. */}
+      {similar.length > 0 && (
+        <section className="max-w-3xl mx-auto px-6 pt-16">
+          <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-8 border-t border-border pt-8">
+            Resonant
+          </h2>
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+            {similar.map((s) => (
+              <li key={s.qid}>
+                <Link
+                  href={`/entity/${s.slug}`}
+                  className="group flex items-baseline gap-3 flex-wrap focus:outline-none"
+                >
+                  <span className="font-display text-lg text-foreground group-hover:text-accent group-focus-visible:text-accent transition-colors">
+                    {s.name}
+                  </span>
+                  {s.dateStart != null && (
+                    <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      {fmtYear(s.dateStart, s.dateStartPrecision)}
                     </span>
                   )}
                 </Link>

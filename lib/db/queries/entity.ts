@@ -30,6 +30,18 @@ export interface RegionPeer {
   dateStartPrecision: string | null;
 }
 
+export interface SimilarEntity {
+  qid: string;
+  slug: string;
+  name: string;
+  type: string;
+  tier: number;
+  dateStart: number | null;
+  dateStartPrecision: string | null;
+  /** Cosine similarity in [0, 1]; higher = closer in embedding space. */
+  similarity: number;
+}
+
 export interface EntityPageData {
   entity: Entity;
   aliases: Array<{ alias: string; language: string }>;
@@ -45,6 +57,13 @@ export interface EntityPageData {
   /** Entities sharing at least one civilizational tag with this one. */
   regionPeers: RegionPeer[];
   primaryTag: string | null;
+  /**
+   * Closest neighbours by embedding cosine similarity. Surface this
+   * alongside the relationship and region peers — it tends to find
+   * conceptually adjacent entries that the Wikidata graph misses
+   * (e.g. "Mansa Musa" → "Sundiata Keïta" even without a P-property link).
+   */
+  similar: SimilarEntity[];
 }
 
 const RELATED_CAP = 12;
@@ -186,6 +205,50 @@ export async function getEntityBySlug(
     }));
   }
 
+  // Embedding-based "resonant" neighbours. Excludes the entity itself,
+  // skips ones we already showed under Connections (redundant), and pulls
+  // a couple extra from the cosine ANN query so the de-dup has slack.
+  const relatedQids = new Set(related.map((r) => r.entity.qid));
+  let similar: SimilarEntity[] = [];
+  if (entity.embedding) {
+    type SimRow = {
+      qid: string;
+      slug: string;
+      name: string;
+      type: string;
+      tier: number;
+      date_start: number | null;
+      date_start_precision: string | null;
+      similarity: number;
+    };
+    const rows = await db.execute<SimRow>(sql`
+      WITH seed AS (
+        SELECT embedding FROM entities WHERE qid = ${entity.qid}
+      )
+      SELECT
+        e.qid, e.slug, e.name, e.type, e.tier,
+        e.date_start, e.date_start_precision,
+        1 - (e.embedding <=> seed.embedding) AS similarity
+      FROM entities e, seed
+      WHERE e.embedding IS NOT NULL AND e.qid <> ${entity.qid}
+      ORDER BY e.embedding <=> seed.embedding
+      LIMIT 20
+    `);
+    similar = Array.from(rows)
+      .filter((r) => !relatedQids.has(r.qid))
+      .slice(0, 6)
+      .map((r) => ({
+        qid: r.qid,
+        slug: r.slug,
+        name: r.name,
+        type: r.type,
+        tier: r.tier,
+        dateStart: r.date_start,
+        dateStartPrecision: r.date_start_precision,
+        similarity: r.similarity,
+      }));
+  }
+
   return {
     entity,
     aliases: aliasRows,
@@ -195,6 +258,7 @@ export async function getEntityBySlug(
     media: mediaRows,
     regionPeers,
     primaryTag,
+    similar,
   };
 }
 

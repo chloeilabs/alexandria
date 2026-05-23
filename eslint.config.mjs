@@ -8,6 +8,7 @@ const config = [
     ignores: [
       "node_modules/",
       ".next/",
+      ".claude/",
       "drizzle/migrations/",
       "dumps/",
       "media-cache/",
