@@ -43,10 +43,22 @@ export async function GET() {
   }
 
   try {
-    const rows = await db.execute<{ p: string }>(sql`SHOW search_path`);
+    const rows = await db.execute<{ p: string }>(
+      sql`SELECT current_setting('search_path') AS p`,
+    );
     result.searchPath = rows[0]?.p ?? null;
   } catch (e) {
     result.searchPathError = e instanceof Error ? e.message : String(e);
+  }
+
+  try {
+    const rows = await db.execute<{ n: number }>(
+      sql`SELECT COUNT(*)::int AS n FROM public.entities`,
+    );
+    result.qualifiedEntitiesCount = rows[0]?.n ?? null;
+  } catch (e) {
+    result.qualifiedEntitiesError =
+      e instanceof Error ? e.message : String(e);
   }
 
   try {
