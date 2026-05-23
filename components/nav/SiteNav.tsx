@@ -9,6 +9,7 @@ const LINKS: ReadonlyArray<{ href: string; label: string }> = [
   { href: "/map", label: "Map" },
   { href: "/graph", label: "Graph" },
   { href: "/civilization", label: "Civilizations" },
+  { href: "/era", label: "Eras" },
 ];
 
 export function SiteNav() {

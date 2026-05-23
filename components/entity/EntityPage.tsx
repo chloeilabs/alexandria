@@ -15,6 +15,14 @@ import {
 } from "@/lib/format";
 import { renderInline } from "@/lib/markdown";
 import { labelFor } from "@/lib/wikidata/predicates";
+import { ERAS } from "@/lib/search";
+
+/** Map a date_start year to its era id. Returns null for undated. */
+function eraIdFor(year: number | null | undefined): string | null {
+  if (year == null) return null;
+  const era = ERAS.find((e) => year >= e.min && year < e.max);
+  return era?.id ?? null;
+}
 
 const TYPE_LABEL: Record<string, string> = {
   person: "Person",
@@ -121,7 +129,21 @@ export function EntityPage({ data }: { data: EntityPageData }) {
       <header className="max-w-3xl mx-auto px-6 pt-20 pb-12">
         <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-6">
           {TYPE_LABEL[entity.type] ?? entity.type}
-          {dateRange ? `  ·  ${dateRange}` : ""}
+          {dateRange && eraIdFor(entity.dateStart) ? (
+            <>
+              {"  ·  "}
+              <Link
+                href={`/era/${eraIdFor(entity.dateStart)}`}
+                className="hover:text-foreground transition-colors focus:outline-none focus-visible:text-foreground focus-visible:underline focus-visible:underline-offset-4"
+              >
+                {dateRange}
+              </Link>
+            </>
+          ) : dateRange ? (
+            `  ·  ${dateRange}`
+          ) : (
+            ""
+          )}
           {primaryTag && (
             <>
               {"  ·  "}
