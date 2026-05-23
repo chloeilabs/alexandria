@@ -1,20 +1,23 @@
-// Hybrid entity search.
+// Hybrid entity search: FTS (keyword) + pgvector (semantic) fused with RRF.
 //
-// V1: Postgres full-text search via the generated `search_text` tsvector
-// column (GIN-indexed). Ranks by ts_rank weighted by tier (curated content
-// surfaces above stubs). ts_headline produces highlighted snippets with
-// matched terms wrapped in <mark>.
+// FTS: Postgres `to_tsvector` over name + summary, GIN-indexed, ranked
+// via ts_rank with a tier bonus so curated content surfaces above stubs.
+// ts_headline produces highlighted snippets.
+//
+// Vector: Voyage 3 large 1024-dim embeddings stored on entities.embedding,
+// cosine-distance via pgvector's `<=>` operator. HNSW-indexed.
+//
+// Fusion: Reciprocal Rank Fusion (k=60, RRF paper standard). Robust to
+// scale differences between FTS and cosine — we never mix raw scores.
 //
 // Facets: optional `type` and `era` filters. Era buckets are derived from
 // date_start.
-//
-// V2 (deferred until embedding provider is chosen): add pgvector cosine
-// similarity on the `embedding` column and combine via Reciprocal Rank
-// Fusion. The structure here is intentionally written so the FTS path is
-// a drop-in component of the eventual RRF.
 
 import { sql } from "drizzle-orm";
+import { embed } from "ai";
+
 import { db } from "../db";
+import { MODEL_EMBED } from "../ai";
 
 export const ENTITY_TYPES = [
   "person",
@@ -54,6 +57,8 @@ export interface SearchHit {
   /** Highlighted snippet (HTML with <mark> wrappers) from ts_headline. */
   snippet: string | null;
   rank: number;
+  /** Where this hit came from. Useful for debugging "why did this rank here?". */
+  source?: "fts" | "vector" | "fused";
 }
 
 type RawHit = {
@@ -71,6 +76,14 @@ type RawHit = {
   rank: number;
 } & Record<string, unknown>;
 
+const FILTER_TYPE = (f: SearchFilters) =>
+  f.type ? sql`AND type = ${f.type}` : sql``;
+
+const FILTER_ERA = (f: SearchFilters) => {
+  const era = f.era ? ERAS.find((e) => e.id === f.era) ?? null : null;
+  return era ? sql`AND date_start BETWEEN ${era.min} AND ${era.max}` : sql``;
+};
+
 /**
  * Full-text search over name + summary. Highlights matches via ts_headline
  * and ranks by ts_rank + a tier bonus.
@@ -78,17 +91,11 @@ type RawHit = {
 export async function searchByText(
   query: string,
   filters: SearchFilters = {},
-  limit = 20,
+  limit = 40,
 ): Promise<SearchHit[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  const era = filters.era
-    ? ERAS.find((e) => e.id === filters.era) ?? null
-    : null;
-
-  // websearch_to_tsquery supports quoted phrases, OR, leading "-" for
-  // negation. ts_headline wraps matches in <mark>...</mark> for the UI.
   const rows = await db.execute<RawHit>(sql`
     SELECT
       qid,
@@ -110,8 +117,8 @@ export async function searchByText(
       ts_rank(search_text, q) + (tier * 0.05) AS rank
     FROM entities, websearch_to_tsquery('english', ${trimmed}) q
     WHERE search_text @@ q
-      ${filters.type ? sql`AND type = ${filters.type}` : sql``}
-      ${era ? sql`AND date_start BETWEEN ${era.min} AND ${era.max}` : sql``}
+      ${FILTER_TYPE(filters)}
+      ${FILTER_ERA(filters)}
     ORDER BY rank DESC, tier DESC, name ASC
     LIMIT ${limit}
   `);
@@ -129,11 +136,84 @@ export async function searchByText(
     summary: r.summary,
     snippet: r.snippet,
     rank: r.rank,
+    source: "fts",
   }));
 }
 
 /**
- * Reciprocal Rank Fusion. Reserved for when pgvector embeddings are wired.
+ * Embed the query, then cosine-rank entities by their stored embedding.
+ * Snippet is the first ~140 chars of the summary; vector hits don't have
+ * keyword spans to highlight.
+ */
+export async function searchByVector(
+  query: string,
+  filters: SearchFilters = {},
+  limit = 40,
+): Promise<SearchHit[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  let queryVector: number[];
+  try {
+    const r = await embed({ model: MODEL_EMBED, value: trimmed });
+    queryVector = r.embedding;
+  } catch (err) {
+    // Vector search is the second leg; if embedding fails we degrade
+    // gracefully to FTS-only rather than failing the whole request.
+    console.warn("[search] embed failed; falling back to FTS-only", err);
+    return [];
+  }
+
+  const vec = `[${queryVector.join(",")}]`;
+
+  const rows = await db.execute<RawHit>(sql`
+    SELECT
+      qid,
+      slug,
+      name,
+      type,
+      tier,
+      date_start,
+      date_start_precision,
+      date_end,
+      date_end_precision,
+      summary,
+      LEFT(COALESCE(summary, ''), 220) AS snippet,
+      1 - (embedding <=> ${vec}::vector) AS rank
+    FROM entities
+    WHERE embedding IS NOT NULL
+      ${FILTER_TYPE(filters)}
+      ${FILTER_ERA(filters)}
+    ORDER BY embedding <=> ${vec}::vector
+    LIMIT ${limit}
+  `);
+
+  return Array.from(rows).map((r) => ({
+    qid: r.qid,
+    slug: r.slug,
+    name: r.name,
+    type: r.type,
+    tier: r.tier,
+    dateStart: r.date_start,
+    dateStartPrecision: r.date_start_precision,
+    dateEnd: r.date_end,
+    dateEndPrecision: r.date_end_precision,
+    summary: r.summary,
+    snippet: r.snippet,
+    rank: r.rank,
+    source: "vector",
+  }));
+}
+
+/**
+ * Reciprocal Rank Fusion. RRF score = sum over lists of 1/(k + rank_in_list).
+ *
+ * Why RRF rather than weighted score average: the FTS `ts_rank` and the
+ * cosine similarity live on totally different scales, and the cosine
+ * similarity distribution shifts with corpus size. RRF only consumes the
+ * *position* of each hit within its list, so it's robust to all of that.
+ * The k=60 default is the constant from the original RRF paper (Cormack
+ * et al., 2009).
  */
 export function rrf(
   lists: SearchHit[][],
@@ -145,12 +225,45 @@ export function rrf(
     list.forEach((hit, rank) => {
       const prev = scores.get(hit.qid);
       const inc = 1 / (k + rank + 1);
-      if (prev) prev.score += inc;
-      else scores.set(hit.qid, { hit, score: inc });
+      if (prev) {
+        prev.score += inc;
+        // Prefer the FTS version (it carries the highlighted snippet).
+        if (hit.source === "fts" && prev.hit.source !== "fts") {
+          prev.hit = { ...hit };
+        }
+      } else {
+        scores.set(hit.qid, { hit: { ...hit }, score: inc });
+      }
     });
   }
   return [...scores.values()]
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
-    .map(({ hit, score }) => ({ ...hit, rank: score }));
+    .map(({ hit, score }) => ({ ...hit, rank: score, source: "fused" }));
+}
+
+/**
+ * The default search: hybrid FTS + vector, fused via RRF. Each leg pulls
+ * 2× the final limit so RRF has room to reorder.
+ */
+export async function search(
+  query: string,
+  filters: SearchFilters = {},
+  limit = 20,
+): Promise<SearchHit[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  const pool = Math.max(limit * 2, 40);
+  const [fts, vec] = await Promise.all([
+    searchByText(trimmed, filters, pool),
+    searchByVector(trimmed, filters, pool),
+  ]);
+
+  // If vector returned nothing (no embeddings yet, or embed call failed),
+  // just return the FTS list directly — RRF on a single list is a no-op
+  // reorder, but skipping it preserves the original ranking unchanged.
+  if (vec.length === 0) return fts.slice(0, limit);
+
+  return rrf([fts, vec], 60, limit);
 }

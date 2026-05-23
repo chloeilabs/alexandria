@@ -35,6 +35,23 @@ export const PRICING: Record<string, { input: number; output: number }> = {
   [MODEL_FLASH]: { input: 1.5, output: 9.0 },
 };
 
+// ---------------------------------------------------------------------------
+// Embeddings
+// ---------------------------------------------------------------------------
+//
+// Voyage 3 large: 1024-dimensional cosine-friendly embeddings. Exact match
+// for our `entities.embedding vector(1024)` column. $0.18 per million tokens
+// (no separate output cost — embedding endpoints are flat-rate).
+
+export const MODEL_EMBED = "voyage/voyage-3-large";
+export const EMBED_DIMENSIONS = 1024;
+/** USD per million tokens for the embedding model. */
+export const EMBED_PRICE_PER_M = 0.18;
+
+export function estimateEmbedCostUsd(tokens: number): number {
+  return (tokens / 1_000_000) * EMBED_PRICE_PER_M;
+}
+
 export function estimateCostUsd(
   model: string,
   inputTokens: number,
