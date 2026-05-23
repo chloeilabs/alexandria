@@ -7,9 +7,7 @@ const config: NextConfig = {
       { protocol: "https", hostname: "commons.wikimedia.org" },
     ],
   },
-  experimental: {
-    typedRoutes: true,
-  },
+  typedRoutes: true,
 };
 
 export default config;
