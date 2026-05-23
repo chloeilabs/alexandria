@@ -22,7 +22,13 @@ export interface ArticleSummary {
   description: string;
   url: string;
   wikibaseItem?: string;
+  /** ~320px thumbnail; suitable for cards and previews. */
   thumbnailUrl?: string;
+  /** Full-resolution original; suitable for hero rendering. */
+  originalUrl?: string;
+  /** Width/height of the original. */
+  originalWidth?: number;
+  originalHeight?: number;
 }
 
 import { stripDiacritics } from "../format";
@@ -43,6 +49,7 @@ async function fetchSummaryOnce(
     content_urls?: { desktop?: { page?: string } };
     wikibase_item?: string;
     thumbnail?: { source?: string };
+    originalimage?: { source?: string; width?: number; height?: number };
   };
   return {
     title: j.title,
@@ -51,6 +58,9 @@ async function fetchSummaryOnce(
     url: j.content_urls?.desktop?.page ?? "",
     wikibaseItem: j.wikibase_item,
     thumbnailUrl: j.thumbnail?.source,
+    originalUrl: j.originalimage?.source,
+    originalWidth: j.originalimage?.width,
+    originalHeight: j.originalimage?.height,
   };
 }
 

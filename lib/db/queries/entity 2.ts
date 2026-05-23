@@ -1,15 +1,13 @@
 // Server-side data fetch helpers for entity pages.
 
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "../index";
-import { eraFor } from "../../format";
 import {
   type Entity,
   type Source,
   entities,
   entityAliases,
-  entityRegions,
   media,
   relationships,
   sources,
@@ -21,15 +19,6 @@ export interface RelatedEntity {
   direction: "outbound" | "inbound";
 }
 
-export interface RegionPeer {
-  qid: string;
-  slug: string;
-  name: string;
-  type: string;
-  dateStart: number | null;
-  dateStartPrecision: string | null;
-}
-
 export interface EntityPageData {
   entity: Entity;
   aliases: Array<{ alias: string; language: string }>;
@@ -37,14 +26,7 @@ export interface EntityPageData {
   /** QIDs that this entity links to but aren't in our DB yet (stubs). */
   orphanTargets: Array<{ qid: string; predicate: string }>;
   sources: Source[];
-  media: Array<{
-    url: string;
-    attribution: string;
-    license: string;
-  }>;
-  /** Entities sharing at least one civilizational tag with this one. */
-  regionPeers: RegionPeer[];
-  primaryTag: string | null;
+  media: Array<{ url: string; localPath: string | null; caption: string | null }>;
 }
 
 const RELATED_CAP = 12;
@@ -135,56 +117,11 @@ export async function getEntityBySlug(
   const mediaRows = await db
     .select({
       url: media.commonsUrl,
-      attribution: media.attribution,
-      license: media.license,
+      localPath: media.localPath,
+      caption: media.caption,
     })
     .from(media)
     .where(eq(media.entityQid, entity.qid));
-
-  // Civilizational tags for this entity → other entities sharing any tag.
-  const civTagsRows = await db
-    .select({ value: entityRegions.regionValue })
-    .from(entityRegions)
-    .where(
-      sql`${entityRegions.entityQid} = ${entity.qid} AND ${entityRegions.regionKind} = 'civilizational'`,
-    );
-  const civTags = civTagsRows.map((r) => r.value);
-  const primaryTag = civTags[0] ?? null;
-
-  let regionPeers: RegionPeer[] = [];
-  if (civTags.length > 0) {
-    // selectDistinct dedupes when an entity matches multiple civ tags.
-    const rows = await db
-      .selectDistinct({
-        qid: entities.qid,
-        slug: entities.slug,
-        name: entities.name,
-        type: entities.type,
-        tier: entities.tier,
-        dateStart: entities.dateStart,
-        dateStartPrecision: entities.dateStartPrecision,
-      })
-      .from(entities)
-      .innerJoin(entityRegions, eq(entityRegions.entityQid, entities.qid))
-      .where(
-        and(
-          eq(entityRegions.regionKind, "civilizational"),
-          inArray(entityRegions.regionValue, civTags),
-          ne(entities.qid, entity.qid),
-        ),
-      )
-      .orderBy(desc(entities.tier), asc(entities.dateStart))
-      .limit(8);
-
-    regionPeers = rows.map((r) => ({
-      qid: r.qid,
-      slug: r.slug,
-      name: r.name,
-      type: r.type,
-      dateStart: r.dateStart,
-      dateStartPrecision: r.dateStartPrecision,
-    }));
-  }
 
   return {
     entity,
@@ -193,8 +130,6 @@ export async function getEntityBySlug(
     orphanTargets: orphanTargets.slice(0, 12),
     sources: srcRows,
     media: mediaRows,
-    regionPeers,
-    primaryTag,
   };
 }
 
@@ -248,7 +183,14 @@ type FeaturedRow = {
   civ_tags: string[];
 } & Record<string, unknown>;
 
-// eraFor: imported from lib/format below.
+function eraFor(year: number | null): string {
+  if (year == null) return "Undated";
+  if (year < -1000) return "Ancient";
+  if (year < 500) return "Classical";
+  if (year < 1500) return "Medieval";
+  if (year < 1800) return "Early Modern";
+  return "Modern";
+}
 
 /**
  * Featured rotation: round-robin pick from civilizational tags so no

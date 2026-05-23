@@ -1,18 +1,18 @@
 // The single React tree that renders an entity at any tier.
-//
-// Tier-conditional structure:
-//   T0  — stub message, just name + dates + connections
-//   T1  — summary as primary, drop-capped first paragraph
-//   T2+ — narrative as primary, drop-capped first paragraph; the Tier 1
-//         summary is demoted to a brief italic epigraph above
-//
-// Visual rules (DECISIONS.md): deep ink background, Cormorant Garamond
-// display headlines, aggressive whitespace, no card grids, no drop shadows.
 
+import Image from "next/image";
 import Link from "next/link";
 
-import type { EntityPageData } from "@/lib/db/queries/entity";
-import { fmtDateRange, fmtYear, firstSentence } from "@/lib/format";
+import type {
+  EntityPageData,
+  RelatedEntity,
+} from "@/lib/db/queries/entity";
+import {
+  fmtDateRange,
+  fmtYear,
+  firstSentence,
+  regionLabel,
+} from "@/lib/format";
 import { renderInline } from "@/lib/markdown";
 import { labelFor } from "@/lib/wikidata/predicates";
 
@@ -30,6 +30,30 @@ function splitParagraphs(text: string): string[] {
     .split(/\n\n+/)
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
+}
+
+/**
+ * Group related entries by target so the same entity doesn't appear
+ * three times for different predicates (e.g., Hannibal → Carthage
+ * showing as CITIZEN OF and BORN IN simultaneously).
+ */
+interface GroupedRelation {
+  entity: RelatedEntity["entity"];
+  labels: string[];
+}
+
+function groupRelated(related: RelatedEntity[]): GroupedRelation[] {
+  const byQid = new Map<string, GroupedRelation>();
+  for (const r of related) {
+    const lbl = labelFor(r.predicate, r.direction);
+    const existing = byQid.get(r.entity.qid);
+    if (existing) {
+      if (!existing.labels.includes(lbl)) existing.labels.push(lbl);
+    } else {
+      byQid.set(r.entity.qid, { entity: r.entity, labels: [lbl] });
+    }
+  }
+  return [...byQid.values()];
 }
 
 interface ProseProps {
@@ -56,7 +80,16 @@ function Prose({ paragraphs }: ProseProps) {
 }
 
 export function EntityPage({ data }: { data: EntityPageData }) {
-  const { entity, aliases, related, orphanTargets, sources } = data;
+  const {
+    entity,
+    aliases,
+    related,
+    orphanTargets,
+    sources,
+    media,
+    regionPeers,
+    primaryTag,
+  } = data;
 
   const dateRange = fmtDateRange(
     entity.dateStart,
@@ -72,13 +105,14 @@ export function EntityPage({ data }: { data: EntityPageData }) {
         ? splitParagraphs(entity.summary)
         : null;
 
-  // Tier 2: a clean first-sentence epigraph from the summary.
   const epigraph =
     entity.tier >= 2 && entity.narrative && entity.summary
       ? firstSentence(entity.summary, 280)
       : null;
 
+  const hero = media[0];
   const hasConnections = related.length > 0 || orphanTargets.length > 0;
+  const groupedRelated = groupRelated(related);
 
   return (
     <article className="min-h-screen pb-32">
@@ -87,6 +121,7 @@ export function EntityPage({ data }: { data: EntityPageData }) {
         <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-6">
           {TYPE_LABEL[entity.type] ?? entity.type}
           {dateRange ? `  ·  ${dateRange}` : ""}
+          {primaryTag ? `  ·  ${regionLabel(primaryTag)}` : ""}
         </div>
         <h1 className="font-display font-light text-5xl md:text-7xl leading-[1.02] tracking-tight text-foreground">
           {entity.name}
@@ -105,6 +140,25 @@ export function EntityPage({ data }: { data: EntityPageData }) {
         )}
       </header>
 
+      {/* Hero imagery — period art / photograph if Commons has one. */}
+      {hero && (
+        <figure className="max-w-4xl mx-auto px-6 pb-12">
+          <div className="relative w-full aspect-[16/9] overflow-hidden bg-card">
+            <Image
+              src={hero.url}
+              alt={`Image illustrating ${entity.name}`}
+              fill
+              sizes="(max-width: 768px) 100vw, 900px"
+              className="object-cover"
+              priority
+            />
+          </div>
+          <figcaption className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/70">
+            {hero.attribution}
+          </figcaption>
+        </figure>
+      )}
+
       {/* Stub state */}
       {entity.tier === 0 && (
         <section className="max-w-3xl mx-auto px-6 py-12">
@@ -117,7 +171,7 @@ export function EntityPage({ data }: { data: EntityPageData }) {
         </section>
       )}
 
-      {/* Tier 2: brief epigraph (one sentence of the Tier 1 summary). */}
+      {/* Tier 2: brief epigraph. */}
       {epigraph && (
         <section className="max-w-3xl mx-auto px-6 pb-10">
           <p className="font-display italic text-xl leading-relaxed text-muted-foreground border-l-2 border-accent/40 pl-5">
@@ -126,47 +180,47 @@ export function EntityPage({ data }: { data: EntityPageData }) {
         </section>
       )}
 
-      {/* Primary prose: narrative if T2+, else summary if T1. */}
+      {/* Primary prose. */}
       {primaryText && (
         <section className="max-w-3xl mx-auto px-6 py-4">
           <Prose paragraphs={primaryText} />
         </section>
       )}
 
-      {/* Connections — always shown if any in-DB or orphan refs exist. */}
+      {/* Connections (deduped by target). */}
       {hasConnections && (
         <section className="max-w-3xl mx-auto px-6 pt-20 pb-2">
           <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-8 border-t border-border pt-8">
             Connected to
           </h2>
-          {related.length > 0 ? (
+          {groupedRelated.length > 0 ? (
             <ul className="space-y-4">
-              {related.map((r, i) => {
-                const lbl = labelFor(r.predicate, r.direction);
-                return (
-                  <li
-                    key={`${r.entity.qid}-${r.predicate}-${r.direction}-${i}`}
-                    className="grid grid-cols-[12rem_1fr] gap-4 items-baseline"
+              {groupedRelated.map((r) => (
+                <li
+                  key={r.entity.qid}
+                  className="grid grid-cols-[12rem_1fr] gap-4 items-baseline"
+                >
+                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    {r.labels.join(" · ")}
+                  </span>
+                  <Link
+                    href={`/entity/${r.entity.slug}`}
+                    className="font-display text-xl text-foreground hover:text-accent transition-colors group flex items-baseline gap-3 flex-wrap focus:outline-none focus-visible:text-accent focus-visible:underline focus-visible:underline-offset-4"
                   >
-                    <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      {lbl}
+                    <span className="group-hover:underline underline-offset-4 decoration-1">
+                      {r.entity.name}
                     </span>
-                    <Link
-                      href={`/entity/${r.entity.slug}`}
-                      className="font-display text-xl text-foreground hover:text-accent transition-colors group flex items-baseline gap-3 flex-wrap focus:outline-none focus-visible:text-accent focus-visible:underline focus-visible:underline-offset-4"
-                    >
-                      <span className="group-hover:underline underline-offset-4 decoration-1">
-                        {r.entity.name}
+                    {r.entity.dateStart != null && (
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {fmtYear(
+                          r.entity.dateStart,
+                          r.entity.dateStartPrecision,
+                        )}
                       </span>
-                      {r.entity.dateStart != null && (
-                        <span className="font-mono text-[10px] text-muted-foreground">
-                          {fmtYear(r.entity.dateStart, r.entity.dateStartPrecision)}
-                        </span>
-                      )}
-                    </Link>
-                  </li>
-                );
-              })}
+                    )}
+                  </Link>
+                </li>
+              ))}
             </ul>
           ) : (
             <p className="font-display italic text-muted-foreground text-lg leading-relaxed">
@@ -174,7 +228,7 @@ export function EntityPage({ data }: { data: EntityPageData }) {
               {" to entries not yet ingested in the Library."}
             </p>
           )}
-          {related.length > 0 && orphanTargets.length > 0 && (
+          {groupedRelated.length > 0 && orphanTargets.length > 0 && (
             <p className="mt-8 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/70">
               + {orphanTargets.length} further connection
               {orphanTargets.length === 1 ? "" : "s"} to entries not yet
@@ -184,9 +238,37 @@ export function EntityPage({ data }: { data: EntityPageData }) {
         </section>
       )}
 
-      {/* Source attribution */}
+      {/* More from this region. */}
+      {regionPeers.length > 0 && primaryTag && (
+        <section className="max-w-3xl mx-auto px-6 pt-16">
+          <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-8 border-t border-border pt-8">
+            More from {regionLabel(primaryTag)}
+          </h2>
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+            {regionPeers.map((p) => (
+              <li key={p.qid}>
+                <Link
+                  href={`/entity/${p.slug}`}
+                  className="group flex items-baseline gap-3 flex-wrap focus:outline-none"
+                >
+                  <span className="font-display text-lg text-foreground group-hover:text-accent group-focus-visible:text-accent transition-colors">
+                    {p.name}
+                  </span>
+                  {p.dateStart != null && (
+                    <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      {fmtYear(p.dateStart, p.dateStartPrecision)}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Sources */}
       {sources.length > 0 && (
-        <footer className="max-w-3xl mx-auto px-6 pt-20 mt-8">
+        <footer className="max-w-3xl mx-auto px-6 pt-16 mt-8">
           <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-4 border-t border-border pt-8">
             Sources
           </h2>
