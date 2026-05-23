@@ -293,6 +293,53 @@ export const unSubregions = pgTable("un_subregions", {
 });
 
 // ---------------------------------------------------------------------------
+// Threads — curated paths through 5-10 entities. Editorial layer.
+// ---------------------------------------------------------------------------
+
+export const threads = pgTable(
+  "threads",
+  {
+    id: serial("id").primaryKey(),
+    slug: citext("slug").notNull().unique(),
+    title: text("title").notNull(),
+    /** One-line subtitle shown in lists. */
+    blurb: text("blurb"),
+    /** Long-form intro paragraph rendered above the entity sequence. */
+    intro: text("intro"),
+    /** Featured = surfaced on the homepage. At most one at a time. */
+    featured: integer("featured").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("threads_featured_idx").on(t.featured)],
+);
+
+export const threadEntries = pgTable(
+  "thread_entries",
+  {
+    id: serial("id").primaryKey(),
+    threadId: integer("thread_id")
+      .notNull()
+      .references(() => threads.id, { onDelete: "cascade" }),
+    entityQid: varchar("entity_qid", { length: 32 })
+      .notNull()
+      .references(() => entities.qid, { onDelete: "cascade" }),
+    /** Position in the thread (0-indexed). */
+    position: integer("position").notNull(),
+    /** Optional editorial note bridging from the previous entry to this one. */
+    note: text("note"),
+  },
+  (t) => [
+    index("thread_entries_thread_idx").on(t.threadId),
+    uniqueIndex("thread_entries_position_unique").on(t.threadId, t.position),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Type exports for application code
 // ---------------------------------------------------------------------------
 
@@ -305,3 +352,7 @@ export type Source = typeof sources.$inferSelect;
 export type NewSource = typeof sources.$inferInsert;
 export type PipelineRun = typeof pipelineRuns.$inferSelect;
 export type PipelineCheckpoint = typeof pipelineCheckpoints.$inferSelect;
+export type Thread = typeof threads.$inferSelect;
+export type NewThread = typeof threads.$inferInsert;
+export type ThreadEntry = typeof threadEntries.$inferSelect;
+export type NewThreadEntry = typeof threadEntries.$inferInsert;

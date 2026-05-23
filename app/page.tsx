@@ -3,6 +3,7 @@ import {
   getAllEntitySlugs,
   getFeaturedEntities,
 } from "@/lib/db/queries/entity";
+import { getFeaturedThread } from "@/lib/db/queries/thread";
 import { fmtYear, regionLabel } from "@/lib/format";
 
 // Force per-request rendering. The DB lives off the build VM (Neon),
@@ -12,9 +13,10 @@ import { fmtYear, regionLabel } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [featured, allEntities] = await Promise.all([
+  const [featured, allEntities, thread] = await Promise.all([
     getFeaturedEntities(12, 2),
     getAllEntitySlugs(200),
+    getFeaturedThread(),
   ]);
   const hasContent = allEntities.length > 0;
 
@@ -37,6 +39,38 @@ export default async function Home() {
           {hasContent ? `${allEntities.length} entries` : "Awaiting the seed"}
         </p>
       </section>
+
+      {thread && (
+        <section className="max-w-5xl mx-auto px-6 pb-24">
+          <div className="flex items-baseline justify-between mb-8 border-b border-border pb-3">
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent">
+              Thread of the week
+            </h2>
+            <Link
+              href="/thread"
+              className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground hover:text-accent transition-colors focus:outline-none focus-visible:underline focus-visible:underline-offset-4"
+            >
+              all threads →
+            </Link>
+          </div>
+          <Link
+            href={`/thread/${thread.slug}`}
+            className="group block focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
+          >
+            <h3 className="font-display font-light text-4xl md:text-5xl text-foreground group-hover:text-accent transition-colors leading-[1.05]">
+              {thread.title}
+            </h3>
+            {thread.blurb && (
+              <p className="mt-4 font-display italic text-xl leading-relaxed text-muted-foreground max-w-2xl">
+                {thread.blurb}
+              </p>
+            )}
+            <div className="mt-6 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              {thread.entries.length} stops  ·  begin →
+            </div>
+          </Link>
+        </section>
+      )}
 
       {featured.length > 0 && (
         <section className="max-w-5xl mx-auto px-6 pb-28">
