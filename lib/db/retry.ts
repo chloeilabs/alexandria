@@ -35,9 +35,20 @@ const TRANSIENT_CODES = new Set([
   "EPIPE",
 ]);
 
+// Drizzle wraps every query failure in DrizzleQueryError with the
+// underlying driver error on `.cause` (see pg-core/session.ts). The
+// wrapper itself has no `code` / SQLSTATE — the real fields are one
+// level down. Without this unwrap, isTransient saw `code: undefined`
+// for every real error and we never retried; logging missed SQLSTATE
+// for the same reason.
+function unwrap(err: unknown): AnyError {
+  if (!err || typeof err !== "object") return {} as AnyError;
+  const cause = (err as { cause?: unknown }).cause;
+  return (cause && typeof cause === "object" ? cause : err) as AnyError;
+}
+
 function isTransient(err: unknown): boolean {
-  if (!err || typeof err !== "object") return false;
-  const code = (err as AnyError).code;
+  const code = unwrap(err).code;
   return typeof code === "string" && TRANSIENT_CODES.has(code);
 }
 
@@ -46,18 +57,26 @@ function logDbError(label: string, err: unknown): void {
     console.error(`[${label}] non-object error`, err);
     return;
   }
-  const e = err as AnyError;
+  const outer = err as AnyError;
+  const inner = unwrap(err);
+  const wrapped = outer !== inner;
   console.error(`[${label}] db error`, {
-    message: e.message,
-    code: e.code,
-    severity: e.severity,
-    detail: e.detail,
-    hint: e.hint,
-    schema: e.schema_name,
-    table: e.table_name,
-    where: e.where,
-    constraint: e.constraint_name,
-    query: e.query,
+    // Inner = the underlying PostgresError / connection error. This is
+    // where SQLSTATE and the structured fields live.
+    code: inner.code,
+    message: inner.message,
+    severity: inner.severity,
+    detail: inner.detail,
+    hint: inner.hint,
+    schema: inner.schema_name,
+    table: inner.table_name,
+    where: inner.where,
+    constraint: inner.constraint_name,
+    // Outer = the DrizzleQueryError wrapper, when present. Its message
+    // includes the rendered query text — useful context but not the
+    // server error.
+    wrapper: wrapped ? outer.message : undefined,
+    query: (outer as { query?: unknown }).query,
   });
 }
 
@@ -97,7 +116,7 @@ export async function withRetry<T>(
         throw err;
       }
       const delay = baseDelayMs * Math.pow(3, i) + Math.floor(Math.random() * 50);
-      const code = (err as AnyError).code ?? "unknown";
+      const code = unwrap(err).code ?? "unknown";
       console.warn(
         `[${label}] transient db error (${String(code)}); retry ${i + 1}/${attempts - 1} in ${delay}ms`,
       );
