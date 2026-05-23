@@ -9,6 +9,8 @@ export const alt = "Alexandria";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const dynamic = "force-dynamic";
+// Force Node runtime so postgres-js works (Edge is the next/og default).
+export const runtime = "nodejs";
 
 interface Props {
   params: { slug: string };

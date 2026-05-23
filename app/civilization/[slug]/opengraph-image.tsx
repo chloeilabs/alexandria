@@ -10,6 +10,10 @@ export const alt = "Alexandria";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const dynamic = "force-dynamic";
+// postgres-js needs Node's net module — Edge runtime (next/og's default
+// for opengraph-image routes) breaks our DB queries here. Era OG appears
+// to work at Edge but pulls less data; entity + civ OG don't.
+export const runtime = "nodejs";
 
 interface Props {
   params: { slug: string };

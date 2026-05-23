@@ -13,6 +13,9 @@ export const alt = "Alexandria";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const dynamic = "force-dynamic";
+// postgres-js requires Node's net module — opengraph-image routes default
+// to Edge runtime in Next.js, which breaks DB queries that reach Neon.
+export const runtime = "nodejs";
 
 interface Props {
   params: { slug: string };
