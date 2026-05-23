@@ -3,6 +3,7 @@
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { db } from "../index";
+import { withRetry } from "../retry";
 import { eraFor } from "../../format";
 import {
   type Entity,
@@ -69,6 +70,12 @@ export interface EntityPageData {
 const RELATED_CAP = 12;
 
 export async function getEntityBySlug(
+  slug: string,
+): Promise<EntityPageData | null> {
+  return withRetry("getEntityBySlug", () => getEntityBySlugInner(slug));
+}
+
+async function getEntityBySlugInner(
   slug: string,
 ): Promise<EntityPageData | null> {
   const [entity] = await db
@@ -276,18 +283,20 @@ export async function getAllEntitySlugs(limit = 200): Promise<
     dateEnd: number | null;
   }>
 > {
-  return db
-    .select({
-      slug: entities.slug,
-      name: entities.name,
-      type: entities.type,
-      tier: entities.tier,
-      dateStart: entities.dateStart,
-      dateEnd: entities.dateEnd,
-    })
-    .from(entities)
-    .orderBy(sql`${entities.tier} DESC, ${entities.name} ASC`)
-    .limit(limit);
+  return withRetry("getAllEntitySlugs", () =>
+    db
+      .select({
+        slug: entities.slug,
+        name: entities.name,
+        type: entities.type,
+        tier: entities.tier,
+        dateStart: entities.dateStart,
+        dateEnd: entities.dateEnd,
+      })
+      .from(entities)
+      .orderBy(sql`${entities.tier} DESC, ${entities.name} ASC`)
+      .limit(limit),
+  );
 }
 
 export interface FeaturedEntity {
@@ -327,25 +336,27 @@ export async function getFeaturedEntities(
   count = 12,
   maxPerRegion = 2,
 ): Promise<FeaturedEntity[]> {
-  const rows = await db.execute<FeaturedRow>(sql`
-    SELECT
-      e.qid,
-      e.slug,
-      e.name,
-      e.type,
-      e.tier,
-      e.date_start,
-      e.date_end,
-      e.summary,
-      COALESCE(
-        ARRAY_AGG(er.region_value) FILTER (WHERE er.region_kind = 'civilizational'),
-        ARRAY[]::varchar[]
-      ) AS civ_tags
-    FROM entities e
-    LEFT JOIN entity_regions er ON er.entity_qid = e.qid
-    WHERE e.tier >= 1
-    GROUP BY e.qid
-  `);
+  const rows = await withRetry("getFeaturedEntities", () =>
+    db.execute<FeaturedRow>(sql`
+      SELECT
+        e.qid,
+        e.slug,
+        e.name,
+        e.type,
+        e.tier,
+        e.date_start,
+        e.date_end,
+        e.summary,
+        COALESCE(
+          ARRAY_AGG(er.region_value) FILTER (WHERE er.region_kind = 'civilizational'),
+          ARRAY[]::varchar[]
+        ) AS civ_tags
+      FROM entities e
+      LEFT JOIN entity_regions er ON er.entity_qid = e.qid
+      WHERE e.tier >= 1
+      GROUP BY e.qid
+    `),
+  );
 
   // Group by primary tag (first civ tag); fallback bucket for untagged.
   const buckets = new Map<string, FeaturedEntity[]>();

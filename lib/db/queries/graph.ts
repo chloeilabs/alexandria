@@ -12,6 +12,7 @@
 
 import { sql } from "drizzle-orm";
 import { db } from "../index";
+import { withRetry } from "../retry";
 
 export interface GraphNode {
   qid: string;
@@ -55,6 +56,10 @@ type RawLink = {
 } & Record<string, unknown>;
 
 export async function getGraphData(): Promise<GraphData> {
+  return withRetry("getGraphData", getGraphDataInner);
+}
+
+async function getGraphDataInner(): Promise<GraphData> {
   const nodeRows = await db.execute<RawNode>(sql`
     SELECT
       e.qid,

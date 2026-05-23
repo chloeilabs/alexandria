@@ -17,6 +17,7 @@ import { sql } from "drizzle-orm";
 import { embed } from "ai";
 
 import { db } from "../db";
+import { withRetry } from "../db/retry";
 import { MODEL_EMBED } from "../ai";
 
 export const ENTITY_TYPES = [
@@ -96,32 +97,36 @@ export async function searchByText(
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  const rows = await db.execute<RawHit>(sql`
-    SELECT
-      qid,
-      slug,
-      name,
-      type,
-      tier,
-      date_start,
-      date_start_precision,
-      date_end,
-      date_end_precision,
-      summary,
-      ts_headline(
-        'english',
-        COALESCE(summary, name),
-        q,
-        'StartSel=<mark>, StopSel=</mark>, MaxWords=28, MinWords=12, ShortWord=3, MaxFragments=2, FragmentDelimiter=" … "'
-      ) AS snippet,
-      ts_rank(search_text, q) + (tier * 0.05) AS rank
-    FROM entities, websearch_to_tsquery('english', ${trimmed}) q
-    WHERE search_text @@ q
-      ${FILTER_TYPE(filters)}
-      ${FILTER_ERA(filters)}
-    ORDER BY rank DESC, tier DESC, name ASC
-    LIMIT ${limit}
-  `);
+  // websearch_to_tsquery supports quoted phrases, OR, leading "-" for
+  // negation. ts_headline wraps matches in <mark>...</mark> for the UI.
+  const rows = await withRetry("searchByText", () =>
+    db.execute<RawHit>(sql`
+      SELECT
+        qid,
+        slug,
+        name,
+        type,
+        tier,
+        date_start,
+        date_start_precision,
+        date_end,
+        date_end_precision,
+        summary,
+        ts_headline(
+          'english',
+          COALESCE(summary, name),
+          q,
+          'StartSel=<mark>, StopSel=</mark>, MaxWords=28, MinWords=12, ShortWord=3, MaxFragments=2, FragmentDelimiter=" … "'
+        ) AS snippet,
+        ts_rank(search_text, q) + (tier * 0.05) AS rank
+      FROM entities, websearch_to_tsquery('english', ${trimmed}) q
+      WHERE search_text @@ q
+        ${FILTER_TYPE(filters)}
+        ${FILTER_ERA(filters)}
+      ORDER BY rank DESC, tier DESC, name ASC
+      LIMIT ${limit}
+    `),
+  );
 
   return Array.from(rows).map((r) => ({
     qid: r.qid,
@@ -166,27 +171,29 @@ export async function searchByVector(
 
   const vec = `[${queryVector.join(",")}]`;
 
-  const rows = await db.execute<RawHit>(sql`
-    SELECT
-      qid,
-      slug,
-      name,
-      type,
-      tier,
-      date_start,
-      date_start_precision,
-      date_end,
-      date_end_precision,
-      summary,
-      LEFT(COALESCE(summary, ''), 220) AS snippet,
-      1 - (embedding <=> ${vec}::vector) AS rank
-    FROM entities
-    WHERE embedding IS NOT NULL
-      ${FILTER_TYPE(filters)}
-      ${FILTER_ERA(filters)}
-    ORDER BY embedding <=> ${vec}::vector
-    LIMIT ${limit}
-  `);
+  const rows = await withRetry("searchByVector", () =>
+    db.execute<RawHit>(sql`
+      SELECT
+        qid,
+        slug,
+        name,
+        type,
+        tier,
+        date_start,
+        date_start_precision,
+        date_end,
+        date_end_precision,
+        summary,
+        LEFT(COALESCE(summary, ''), 220) AS snippet,
+        1 - (embedding <=> ${vec}::vector) AS rank
+      FROM entities
+      WHERE embedding IS NOT NULL
+        ${FILTER_TYPE(filters)}
+        ${FILTER_ERA(filters)}
+      ORDER BY embedding <=> ${vec}::vector
+      LIMIT ${limit}
+    `),
+  );
 
   return Array.from(rows).map((r) => ({
     qid: r.qid,
