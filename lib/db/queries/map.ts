@@ -2,6 +2,7 @@
 
 import { sql } from "drizzle-orm";
 import { db } from "../index";
+import { withRetry } from "../retry";
 import { entities } from "../schema";
 
 export interface MapMarker {
@@ -17,20 +18,24 @@ export interface MapMarker {
 }
 
 export async function getMapMarkers(): Promise<MapMarker[]> {
-  const rows = await db
-    .select({
-      qid: entities.qid,
-      slug: entities.slug,
-      name: entities.name,
-      type: entities.type,
-      tier: entities.tier,
-      latitude: entities.latitude,
-      longitude: entities.longitude,
-      dateStart: entities.dateStart,
-      dateEnd: entities.dateEnd,
-    })
-    .from(entities)
-    .where(sql`${entities.latitude} IS NOT NULL AND ${entities.longitude} IS NOT NULL`);
+  const rows = await withRetry("getMapMarkers", () =>
+    db
+      .select({
+        qid: entities.qid,
+        slug: entities.slug,
+        name: entities.name,
+        type: entities.type,
+        tier: entities.tier,
+        latitude: entities.latitude,
+        longitude: entities.longitude,
+        dateStart: entities.dateStart,
+        dateEnd: entities.dateEnd,
+      })
+      .from(entities)
+      .where(
+        sql`${entities.latitude} IS NOT NULL AND ${entities.longitude} IS NOT NULL`,
+      ),
+  );
 
   // The WHERE clause guarantees non-null but TS doesn't know that.
   return rows

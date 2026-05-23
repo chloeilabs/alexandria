@@ -15,6 +15,7 @@
 
 import { sql } from "drizzle-orm";
 import { db } from "../db";
+import { withRetry } from "../db/retry";
 
 export const ENTITY_TYPES = [
   "person",
@@ -89,32 +90,34 @@ export async function searchByText(
 
   // websearch_to_tsquery supports quoted phrases, OR, leading "-" for
   // negation. ts_headline wraps matches in <mark>...</mark> for the UI.
-  const rows = await db.execute<RawHit>(sql`
-    SELECT
-      qid,
-      slug,
-      name,
-      type,
-      tier,
-      date_start,
-      date_start_precision,
-      date_end,
-      date_end_precision,
-      summary,
-      ts_headline(
-        'english',
-        COALESCE(summary, name),
-        q,
-        'StartSel=<mark>, StopSel=</mark>, MaxWords=28, MinWords=12, ShortWord=3, MaxFragments=2, FragmentDelimiter=" … "'
-      ) AS snippet,
-      ts_rank(search_text, q) + (tier * 0.05) AS rank
-    FROM entities, websearch_to_tsquery('english', ${trimmed}) q
-    WHERE search_text @@ q
-      ${filters.type ? sql`AND type = ${filters.type}` : sql``}
-      ${era ? sql`AND date_start BETWEEN ${era.min} AND ${era.max}` : sql``}
-    ORDER BY rank DESC, tier DESC, name ASC
-    LIMIT ${limit}
-  `);
+  const rows = await withRetry("searchByText", () =>
+    db.execute<RawHit>(sql`
+      SELECT
+        qid,
+        slug,
+        name,
+        type,
+        tier,
+        date_start,
+        date_start_precision,
+        date_end,
+        date_end_precision,
+        summary,
+        ts_headline(
+          'english',
+          COALESCE(summary, name),
+          q,
+          'StartSel=<mark>, StopSel=</mark>, MaxWords=28, MinWords=12, ShortWord=3, MaxFragments=2, FragmentDelimiter=" … "'
+        ) AS snippet,
+        ts_rank(search_text, q) + (tier * 0.05) AS rank
+      FROM entities, websearch_to_tsquery('english', ${trimmed}) q
+      WHERE search_text @@ q
+        ${filters.type ? sql`AND type = ${filters.type}` : sql``}
+        ${era ? sql`AND date_start BETWEEN ${era.min} AND ${era.max}` : sql``}
+      ORDER BY rank DESC, tier DESC, name ASC
+      LIMIT ${limit}
+    `),
+  );
 
   return Array.from(rows).map((r) => ({
     qid: r.qid,

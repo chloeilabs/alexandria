@@ -3,6 +3,7 @@
 
 import { sql } from "drizzle-orm";
 import { db } from "../index";
+import { withRetry } from "../retry";
 
 export interface TimelineEvent {
   qid: string;
@@ -31,9 +32,8 @@ type RawRow = {
 } & Record<string, unknown>;
 
 export async function getTimelineEvents(): Promise<TimelineEvent[]> {
-  let rows: Awaited<ReturnType<typeof db.execute<RawRow>>>;
-  try {
-    rows = await db.execute<RawRow>(sql`
+  const rows = await withRetry("getTimelineEvents", () =>
+    db.execute<RawRow>(sql`
       SELECT
         e.qid,
         e.slug,
@@ -53,22 +53,8 @@ export async function getTimelineEvents(): Promise<TimelineEvent[]> {
       WHERE e.date_start IS NOT NULL
       GROUP BY e.qid
       ORDER BY e.date_start ASC
-    `);
-  } catch (err) {
-    const e = err as Record<string, unknown>;
-    console.error("[getTimelineEvents] postgres error", {
-      message: e.message,
-      code: e.code,
-      severity: e.severity,
-      detail: e.detail,
-      hint: e.hint,
-      schema: e.schema_name,
-      table: e.table_name,
-      where: e.where,
-      query: e.query,
-    });
-    throw err;
-  }
+    `),
+  );
 
   return Array.from(rows).map((r) => ({
     qid: r.qid,

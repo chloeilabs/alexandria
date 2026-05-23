@@ -3,6 +3,7 @@
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { db } from "../index";
+import { withRetry } from "../retry";
 import { eraFor } from "../../format";
 import {
   type Entity,
@@ -50,6 +51,12 @@ export interface EntityPageData {
 const RELATED_CAP = 12;
 
 export async function getEntityBySlug(
+  slug: string,
+): Promise<EntityPageData | null> {
+  return withRetry(`getEntityBySlug(${slug})`, () => getEntityBySlugInner(slug));
+}
+
+async function getEntityBySlugInner(
   slug: string,
 ): Promise<EntityPageData | null> {
   const [entity] = await db
@@ -208,18 +215,20 @@ export async function getAllEntitySlugs(limit = 200): Promise<
     dateEnd: number | null;
   }>
 > {
-  return db
-    .select({
-      slug: entities.slug,
-      name: entities.name,
-      type: entities.type,
-      tier: entities.tier,
-      dateStart: entities.dateStart,
-      dateEnd: entities.dateEnd,
-    })
-    .from(entities)
-    .orderBy(sql`${entities.tier} DESC, ${entities.name} ASC`)
-    .limit(limit);
+  return withRetry("getAllEntitySlugs", () =>
+    db
+      .select({
+        slug: entities.slug,
+        name: entities.name,
+        type: entities.type,
+        tier: entities.tier,
+        dateStart: entities.dateStart,
+        dateEnd: entities.dateEnd,
+      })
+      .from(entities)
+      .orderBy(sql`${entities.tier} DESC, ${entities.name} ASC`)
+      .limit(limit),
+  );
 }
 
 export interface FeaturedEntity {
@@ -259,9 +268,8 @@ export async function getFeaturedEntities(
   count = 12,
   maxPerRegion = 2,
 ): Promise<FeaturedEntity[]> {
-  let rows: Awaited<ReturnType<typeof db.execute<FeaturedRow>>>;
-  try {
-    rows = await db.execute<FeaturedRow>(sql`
+  const rows = await withRetry("getFeaturedEntities", () =>
+    db.execute<FeaturedRow>(sql`
       SELECT
         e.qid,
         e.slug,
@@ -279,22 +287,8 @@ export async function getFeaturedEntities(
       LEFT JOIN entity_regions er ON er.entity_qid = e.qid
       WHERE e.tier >= 1
       GROUP BY e.qid
-    `);
-  } catch (err) {
-    const e = err as Record<string, unknown>;
-    console.error("[getFeaturedEntities] postgres error", {
-      message: e.message,
-      code: e.code,
-      severity: e.severity,
-      detail: e.detail,
-      hint: e.hint,
-      schema: e.schema_name,
-      table: e.table_name,
-      where: e.where,
-      query: e.query,
-    });
-    throw err;
-  }
+    `),
+  );
 
   // Group by primary tag (first civ tag); fallback bucket for untagged.
   const buckets = new Map<string, FeaturedEntity[]>();
