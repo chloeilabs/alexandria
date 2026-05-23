@@ -41,3 +41,4 @@ dumps/
 
 # Local-only IDE settings
 .claude/
+.vercel
