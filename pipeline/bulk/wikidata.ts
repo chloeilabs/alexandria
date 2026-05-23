@@ -224,7 +224,16 @@ export const TYPE_WHITELIST = new Map<string, EntityType>([
   ["Q42883", "concept"], // culture (alt)
   ["Q105648", "place"], // civilization
   ["Q1138571", "place"], // trade route
+  ["Q405155", "place"], // trade route (alt label)
+  ["Q445741", "place"], // historic road
+  ["Q601401", "concept"], // trade
   ["Q44512", "concept"], // disease
+
+  // Historical phenomena / processes (came up in seed-batch-4)
+  ["Q3042783", "event"], // societal collapse
+  ["Q49367", "event"], // ice age
+  ["Q6957341", "concept"], // Indian religion (Sikhism P31)
+  ["Q32090", "concept"], // lifestyle (catches some religion entries)
 ]);
 
 /**

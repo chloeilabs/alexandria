@@ -6,7 +6,7 @@ import {
   type EraId,
   type EntityTypeFilter,
   type SearchFilters,
-  searchByText,
+  search,
 } from "@/lib/search";
 import { getFeaturedEntities } from "@/lib/db/queries/entity";
 import { fmtYear, regionLabel } from "@/lib/format";
@@ -56,7 +56,7 @@ export default async function SearchPage({ searchParams }: PageProps) {
   const filtersActive = filters.type != null || filters.era != null;
 
   const [hits, suggestions] = await Promise.all([
-    query ? searchByText(query, filters, 30) : Promise.resolve([]),
+    query ? search(query, filters, 30) : Promise.resolve([]),
     query ? Promise.resolve([]) : getFeaturedEntities(6, 1),
   ]);
 
