@@ -36,6 +36,12 @@ export default async function Home() {
           >
             Timeline →
           </Link>
+          <Link
+            href="/graph"
+            className="font-mono text-xs uppercase tracking-[0.2em] text-accent hover:text-foreground transition-colors"
+          >
+            Graph →
+          </Link>
           <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
             {hasContent
               ? `${entities.length} entries seeded`
