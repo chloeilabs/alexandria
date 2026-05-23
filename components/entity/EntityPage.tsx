@@ -122,7 +122,17 @@ export function EntityPage({ data }: { data: EntityPageData }) {
         <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-6">
           {TYPE_LABEL[entity.type] ?? entity.type}
           {dateRange ? `  ·  ${dateRange}` : ""}
-          {primaryTag ? `  ·  ${regionLabel(primaryTag)}` : ""}
+          {primaryTag && (
+            <>
+              {"  ·  "}
+              <Link
+                href={`/civilization/${primaryTag}`}
+                className="hover:text-foreground transition-colors focus:outline-none focus-visible:text-foreground focus-visible:underline focus-visible:underline-offset-4"
+              >
+                {regionLabel(primaryTag)}
+              </Link>
+            </>
+          )}
         </div>
         <h1 className="font-display font-light text-5xl md:text-7xl leading-[1.02] tracking-tight text-foreground">
           {entity.name}
@@ -242,9 +252,17 @@ export function EntityPage({ data }: { data: EntityPageData }) {
       {/* More from this region. */}
       {regionPeers.length > 0 && primaryTag && (
         <section className="max-w-3xl mx-auto px-6 pt-16">
-          <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-8 border-t border-border pt-8">
-            More from {regionLabel(primaryTag)}
-          </h2>
+          <div className="flex items-baseline justify-between flex-wrap gap-x-6 gap-y-2 mb-8 border-t border-border pt-8">
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent">
+              More from {regionLabel(primaryTag)}
+            </h2>
+            <Link
+              href={`/civilization/${primaryTag}`}
+              className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground hover:text-accent transition-colors focus:outline-none focus-visible:text-accent focus-visible:underline focus-visible:underline-offset-4"
+            >
+              browse all →
+            </Link>
+          </div>
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
             {regionPeers.map((p) => (
               <li key={p.qid}>
