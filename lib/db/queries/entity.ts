@@ -3,6 +3,7 @@
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "../index";
+import { eraFor } from "../../format";
 import {
   type Entity,
   type Source,
@@ -183,14 +184,7 @@ type FeaturedRow = {
   civ_tags: string[];
 } & Record<string, unknown>;
 
-function eraFor(year: number | null): string {
-  if (year == null) return "Undated";
-  if (year < -1000) return "Ancient";
-  if (year < 500) return "Classical";
-  if (year < 1500) return "Medieval";
-  if (year < 1800) return "Early Modern";
-  return "Modern";
-}
+// eraFor: imported from lib/format below.
 
 /**
  * Featured rotation: round-robin pick from civilizational tags so no

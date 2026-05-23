@@ -1,13 +1,9 @@
 import Link from "next/link";
 import { searchByText } from "@/lib/search";
+import { fmtYear } from "@/lib/format";
 
 interface PageProps {
   searchParams: Promise<{ q?: string }>;
-}
-
-function fmtYear(year: number | null): string {
-  if (year == null) return "";
-  return year < 0 ? `${-year} BCE` : `${year} CE`;
 }
 
 export default async function SearchPage({ searchParams }: PageProps) {
@@ -16,15 +12,8 @@ export default async function SearchPage({ searchParams }: PageProps) {
   const hits = query ? await searchByText(query, 30) : [];
 
   return (
-    <main className="min-h-screen max-w-3xl mx-auto px-6 py-20">
-      <Link
-        href="/"
-        className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-accent transition-colors"
-      >
-        ← The Library
-      </Link>
-
-      <form action="/search" method="get" className="mt-12 mb-16">
+    <main className="min-h-screen max-w-3xl mx-auto px-6 pt-16 pb-24">
+      <form action="/search" method="get" className="mb-16">
         <input
           name="q"
           defaultValue={query}
@@ -48,29 +37,28 @@ export default async function SearchPage({ searchParams }: PageProps) {
 
       {hits.length > 0 && (
         <>
-          <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-accent mb-8">
+          <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-8">
             {hits.length} result{hits.length === 1 ? "" : "s"}
           </h2>
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-border/60">
             {hits.map((h) => (
-              <li key={h.qid} className="py-6">
+              <li key={h.qid} className="py-7">
                 <Link href={`/entity/${h.slug}`} className="block group">
-                  <div className="flex items-baseline gap-4 flex-wrap">
-                    <h3 className="font-display text-2xl text-foreground group-hover:text-accent transition-colors">
+                  <div className="flex items-baseline gap-4 flex-wrap mb-2">
+                    <h3 className="font-display text-2xl md:text-3xl text-foreground group-hover:text-accent transition-colors">
                       {h.name}
                     </h3>
-                    <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                       {h.type}
                       {h.dateStart != null
-                        ? `  ·  ${fmtYear(h.dateStart)}`
+                        ? `  ·  ${fmtYear(h.dateStart, h.dateStartPrecision)}`
                         : ""}
-                      {h.tier >= 1 ? `  ·  T${h.tier}` : ""}
                     </span>
                   </div>
                   {h.summary && (
-                    <p className="mt-3 text-base leading-relaxed text-muted-foreground line-clamp-2">
-                      {h.summary.slice(0, 240)}
-                      {h.summary.length > 240 ? "…" : ""}
+                    <p className="text-base leading-relaxed text-muted-foreground line-clamp-2">
+                      {h.summary.slice(0, 260)}
+                      {h.summary.length > 260 ? "…" : ""}
                     </p>
                   )}
                 </Link>

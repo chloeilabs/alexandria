@@ -3,11 +3,7 @@ import {
   getAllEntitySlugs,
   getFeaturedEntities,
 } from "@/lib/db/queries/entity";
-
-function fmtYear(year: number | null): string {
-  if (year == null) return "";
-  return year < 0 ? `${-year} BCE` : `${year} CE`;
-}
+import { fmtYear, regionLabel } from "@/lib/format";
 
 export default async function Home() {
   const [featured, allEntities] = await Promise.all([
@@ -16,7 +12,6 @@ export default async function Home() {
   ]);
   const hasContent = allEntities.length > 0;
 
-  // Distinct regions + eras in the featured set (for the masthead chip)
   const regionCount = new Set(
     featured.map((f) => f.primaryTag).filter((t): t is string => t != null),
   ).size;
@@ -24,68 +19,40 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen">
-      <section className="max-w-3xl mx-auto px-6 pt-32 pb-16">
+      <section className="max-w-3xl mx-auto px-6 pt-28 pb-20">
         <h1 className="font-display font-light text-6xl md:text-7xl leading-none tracking-tight text-foreground">
           The Library of Alexandria
         </h1>
-        <p className="mt-6 font-display italic text-2xl text-muted-foreground max-w-xl">
-          A living digital encyclopedia of human civilization. Begin anywhere;
-          follow the threads.
+        <p className="mt-6 font-display italic text-2xl text-muted-foreground max-w-xl leading-snug">
+          A living digital encyclopedia of human civilization. Begin
+          anywhere; follow the threads.
         </p>
-        <div className="mt-10 flex items-baseline gap-6 flex-wrap">
-          <Link
-            href="/search"
-            className="font-mono text-xs uppercase tracking-[0.2em] text-accent hover:text-foreground transition-colors"
-          >
-            Search →
-          </Link>
-          <Link
-            href="/timeline"
-            className="font-mono text-xs uppercase tracking-[0.2em] text-accent hover:text-foreground transition-colors"
-          >
-            Timeline →
-          </Link>
-          <Link
-            href="/graph"
-            className="font-mono text-xs uppercase tracking-[0.2em] text-accent hover:text-foreground transition-colors"
-          >
-            Graph →
-          </Link>
-          <Link
-            href="/map"
-            className="font-mono text-xs uppercase tracking-[0.2em] text-accent hover:text-foreground transition-colors"
-          >
-            Map →
-          </Link>
-          <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            {hasContent
-              ? `${allEntities.length} entries`
-              : "Awaiting the seed"}
-          </span>
-        </div>
+        <p className="mt-10 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+          {hasContent ? `${allEntities.length} entries` : "Awaiting the seed"}
+        </p>
       </section>
 
       {featured.length > 0 && (
-        <section className="max-w-5xl mx-auto px-6 pb-24">
-          <div className="flex items-baseline justify-between mb-10 border-b border-border pb-3">
-            <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-accent">
+        <section className="max-w-5xl mx-auto px-6 pb-28">
+          <div className="flex items-baseline justify-between mb-12 border-b border-border pb-3">
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent">
               Featured
             </h2>
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
               {regionCount} regions · {eraCount} eras
             </span>
           </div>
-          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-14 gap-y-12">
             {featured.map((e) => (
               <li key={e.qid}>
                 <Link href={`/entity/${e.slug}`} className="group block">
-                  <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
-                    {e.primaryTag?.replace(/-/g, " ") ?? e.type}
+                  <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-3">
+                    {e.primaryTag ? regionLabel(e.primaryTag) : e.type}
                     {e.dateStart != null
                       ? `  ·  ${fmtYear(e.dateStart)}`
                       : ""}
                   </div>
-                  <h3 className="font-display text-2xl md:text-3xl text-foreground group-hover:text-accent transition-colors leading-tight mb-3">
+                  <h3 className="font-display font-light text-3xl md:text-4xl text-foreground group-hover:text-accent transition-colors leading-[1.05] mb-4">
                     {e.name}
                   </h3>
                   {e.summary && (
@@ -103,10 +70,10 @@ export default async function Home() {
 
       {hasContent && (
         <section className="max-w-3xl mx-auto px-6 pb-32">
-          <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-accent mb-6 border-b border-border pb-3">
+          <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-6 border-b border-border pb-3">
             Browse all
           </h2>
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-border/60">
             {allEntities.map((e) => (
               <li
                 key={e.slug}
@@ -118,12 +85,9 @@ export default async function Home() {
                 >
                   {e.name}
                 </Link>
-                <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground whitespace-nowrap">
                   {e.type}
-                  {e.dateStart != null
-                    ? `  ·  ${fmtYear(e.dateStart)}`
-                    : ""}
-                  {e.tier >= 1 ? `  ·  T${e.tier}` : ""}
+                  {e.dateStart != null ? `  ·  ${fmtYear(e.dateStart)}` : ""}
                 </span>
               </li>
             ))}

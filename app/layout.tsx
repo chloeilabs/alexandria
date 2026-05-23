@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Cormorant_Garamond, JetBrains_Mono } from "next/font/google";
+import { SiteNav } from "@/components/nav/SiteNav";
 import "./globals.css";
 
 const inter = Inter({
@@ -37,7 +38,10 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${cormorant.variable} ${jetbrains.variable}`}
     >
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <SiteNav />
+        {children}
+      </body>
     </html>
   );
 }

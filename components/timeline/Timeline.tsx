@@ -13,6 +13,8 @@ import {
 } from "d3";
 
 import type { TimelineEvent } from "@/lib/db/queries/timeline";
+import { color } from "@/lib/colors";
+import { fmtYear, regionLabel } from "@/lib/format";
 
 interface Props {
   events: TimelineEvent[];
@@ -28,25 +30,10 @@ const RIGHT_PAD = 24;
 const BAR_HEIGHT = 12;
 const POINT_RADIUS = 5;
 
-// Colors — read live from CSS variables so theme changes propagate
-function readCssColor(name: string, fallback: string): string {
-  if (typeof window === "undefined") return fallback;
-  const v = getComputedStyle(document.documentElement)
-    .getPropertyValue(name)
-    .trim();
-  return v || fallback;
-}
-
-function fmtYear(y: number): string {
-  if (y === 0) return "1 CE";
-  return y < 0 ? `${-y} BCE` : `${y} CE`;
-}
-
 function tierColor(tier: number, accent: string, muted: string): string {
   if (tier >= 2) return accent;
   if (tier === 1) return muted;
-  // Tier 0 — even more muted
-  return muted + "80";
+  return `${muted}80`;
 }
 
 export function Timeline({ events }: Props) {
@@ -64,7 +51,6 @@ export function Timeline({ events }: Props) {
 
   // Group entities into tracks. One track per civilizational tag; if an
   // entity has multiple tags, use its primary (first) tag.
-  // Entities with no tags get an "uncategorised" track.
   const { tracks, eventsByTrack } = useMemo(() => {
     const map = new Map<string, TimelineEvent[]>();
     for (const ev of events) {
@@ -73,7 +59,7 @@ export function Timeline({ events }: Props) {
       if (arr) arr.push(ev);
       else map.set(tag, [ev]);
     }
-    // Sort tracks by their earliest entity (chronological, anti-Western-default)
+    // Chronological track order (anti-Western-default).
     const trackList = [...map.entries()]
       .map(([tag, arr]) => ({
         tag,
@@ -87,10 +73,8 @@ export function Timeline({ events }: Props) {
     };
   }, [events]);
 
-  // Compute height from track count
   const innerHeight = tracks.length * TRACK_HEIGHT + TOP_PAD + BOTTOM_PAD;
 
-  // Track the wrapper's width
   useEffect(() => {
     const wrap = wrapperRef.current;
     if (!wrap) return;
@@ -106,7 +90,6 @@ export function Timeline({ events }: Props) {
     return () => ro.disconnect();
   }, [innerHeight]);
 
-  // Base scale: maps full year range across drawing width
   const baseScale: ScaleLinear<number, number> = useMemo(
     () =>
       scaleLinear()
@@ -115,13 +98,11 @@ export function Timeline({ events }: Props) {
     [size.width],
   );
 
-  // Effective scale = base scale transformed by zoom
   const x = useMemo(
     () => transform.rescaleX(baseScale),
     [transform, baseScale],
   );
 
-  // D3 zoom binding
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -136,7 +117,6 @@ export function Timeline({ events }: Props) {
         [size.width, innerHeight],
       ])
       .filter((event: Event) => {
-        // Allow wheel + drag (no double-click zoom — too jumpy)
         return (
           event.type !== "dblclick" &&
           !(event.type === "mousedown" && (event as MouseEvent).button !== 0)
@@ -151,7 +131,6 @@ export function Timeline({ events }: Props) {
     };
   }, [size.width, innerHeight]);
 
-  // Render canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -165,38 +144,35 @@ export function Timeline({ events }: Props) {
     canvas.style.height = `${innerHeight}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const bg = readCssColor("--color-background", "#0d1320");
-    const fg = readCssColor("--color-foreground", "#f6f5f0");
-    const border = readCssColor("--color-border", "#2a3142");
-    const accent = readCssColor("--color-accent", "#d6b066");
-    const muted = readCssColor("--color-muted-foreground", "#a89d8a");
+    const bg = color("background");
+    const fg = color("foreground");
+    const border = color("border");
+    const accent = color("accent");
+    const muted = color("muted");
 
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, size.width, innerHeight);
 
-    // Track separators + labels
+    // Tracks
     ctx.font = "10px 'JetBrains Mono', ui-monospace, monospace";
     ctx.textBaseline = "middle";
     for (let i = 0; i < tracks.length; i += 1) {
       const trackTag = tracks[i]!;
       const y = TOP_PAD + i * TRACK_HEIGHT + TRACK_HEIGHT / 2;
 
-      // Light separator
-      ctx.strokeStyle = border;
+      ctx.strokeStyle = `${border}80`;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, y + TRACK_HEIGHT / 2);
       ctx.lineTo(size.width, y + TRACK_HEIGHT / 2);
       ctx.stroke();
 
-      // Track label
       ctx.fillStyle = muted;
       ctx.textAlign = "left";
-      const lbl = trackTag.toUpperCase().replace(/-/g, " ");
-      ctx.fillText(lbl, 12, y);
+      ctx.fillText(regionLabel(trackTag), 12, y);
     }
 
-    // Time-axis vertical guides (every 500 years at default zoom, denser when zoomed in)
+    // Time-axis verticals (zoom-dependent density)
     const visibleRange = x.domain();
     const spanYears = visibleRange[1]! - visibleRange[0]!;
     let tickStep: number;
@@ -207,11 +183,11 @@ export function Timeline({ events }: Props) {
     else if (spanYears > 60) tickStep = 10;
     else tickStep = 5;
 
-    ctx.strokeStyle = border + "80";
+    ctx.strokeStyle = `${border}60`;
     ctx.lineWidth = 1;
     const firstTick = Math.ceil(visibleRange[0]! / tickStep) * tickStep;
-    for (let y = firstTick; y <= visibleRange[1]!; y += tickStep) {
-      const px = x(y);
+    for (let yr = firstTick; yr <= visibleRange[1]!; yr += tickStep) {
+      const px = x(yr);
       if (px < TRACK_LABEL_WIDTH || px > size.width - RIGHT_PAD) continue;
       ctx.beginPath();
       ctx.moveTo(px, TOP_PAD - 4);
@@ -231,17 +207,15 @@ export function Timeline({ events }: Props) {
         const w = Math.max(0, x2 - x1);
 
         const isHover = hover?.event.qid === ev.qid;
-        const color = isHover ? fg : tierColor(ev.tier, accent, muted);
+        const fill = isHover ? fg : tierColor(ev.tier, accent, muted);
 
         if (w < 2) {
-          // Point (no duration or extremely short)
-          ctx.fillStyle = color;
+          ctx.fillStyle = fill;
           ctx.beginPath();
           ctx.arc(x1, yCenter, POINT_RADIUS, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          // Bar
-          ctx.fillStyle = color;
+          ctx.fillStyle = fill;
           const barY = yCenter - BAR_HEIGHT / 2;
           ctx.beginPath();
           ctx.roundRect(x1, barY, w, BAR_HEIGHT, BAR_HEIGHT / 2);
@@ -250,7 +224,7 @@ export function Timeline({ events }: Props) {
       }
     }
 
-    // Border-line dividing label gutter from data area
+    // Gutter divider
     ctx.strokeStyle = border;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -258,30 +232,32 @@ export function Timeline({ events }: Props) {
     ctx.lineTo(TRACK_LABEL_WIDTH, innerHeight - BOTTOM_PAD + 12);
     ctx.stroke();
 
-    // Title in top-left gutter
-    ctx.fillStyle = fg;
-    ctx.font =
-      "300 14px 'Cormorant Garamond', Georgia, 'Times New Roman', serif";
-    ctx.textAlign = "left";
-    ctx.fillText(`${events.length} entries`, 12, 24);
-    ctx.font = "10px 'JetBrains Mono', ui-monospace, monospace";
+    // Hint text in the top-left gutter
     ctx.fillStyle = muted;
-    ctx.fillText("SCROLL TO ZOOM · DRAG TO PAN", 12, 40);
-  }, [transform, x, tracks, eventsByTrack, size, innerHeight, events.length, hover]);
+    ctx.font = "10px 'JetBrains Mono', ui-monospace, monospace";
+    ctx.textAlign = "left";
+    ctx.fillText("SCROLL TO ZOOM · DRAG TO PAN", 12, 28);
+  }, [
+    transform,
+    x,
+    tracks,
+    eventsByTrack,
+    size,
+    innerHeight,
+    events.length,
+    hover,
+  ]);
 
-  // Render axis below tracks via SVG (D3 axisBottom)
+  // SVG axis below
   useEffect(() => {
     const svg = axisRef.current;
     if (!svg) return;
-    const muted = readCssColor("--color-muted-foreground", "#a89d8a");
+    const muted = color("muted");
     select(svg).selectAll("*").remove();
     const ax = axisBottom(x)
       .ticks(8)
       .tickFormat((d: number | { valueOf(): number }) => fmtYear(Number(d)));
-    const g = select(svg)
-      .append("g")
-      .attr("transform", `translate(0, 0)`)
-      .call(ax);
+    const g = select(svg).append("g").attr("transform", `translate(0, 0)`).call(ax);
     g.selectAll("path,line").attr("stroke", muted).attr("opacity", 0.4);
     g.selectAll("text")
       .attr("fill", muted)
@@ -297,7 +273,6 @@ export function Timeline({ events }: Props) {
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
 
-      // Find track
       const trackIdx = Math.floor((my - TOP_PAD) / TRACK_HEIGHT);
       if (trackIdx < 0 || trackIdx >= tracks.length) {
         setHover(null);
@@ -306,15 +281,15 @@ export function Timeline({ events }: Props) {
       const trackTag = tracks[trackIdx]!;
       const evs = eventsByTrack.get(trackTag) ?? [];
 
-      // Find closest entity on this track
       let best: TimelineEvent | null = null;
       let bestDist = Infinity;
       for (const ev of evs) {
         const x1 = x(ev.dateStart);
         const x2 = ev.dateEnd != null ? x(ev.dateEnd) : x1;
-        let dist: number;
-        if (mx >= x1 && mx <= x2) dist = 0;
-        else dist = Math.min(Math.abs(mx - x1), Math.abs(mx - x2));
+        const dist =
+          mx >= x1 && mx <= x2
+            ? 0
+            : Math.min(Math.abs(mx - x1), Math.abs(mx - x2));
         if (dist < bestDist) {
           bestDist = dist;
           best = ev;
@@ -330,9 +305,7 @@ export function Timeline({ events }: Props) {
   );
 
   const handleClick = useCallback(() => {
-    if (hover) {
-      router.push(`/entity/${hover.event.slug}`);
-    }
+    if (hover) router.push(`/entity/${hover.event.slug}`);
   }, [hover, router]);
 
   return (
@@ -352,28 +325,24 @@ export function Timeline({ events }: Props) {
       />
       {hover && (
         <div
-          className="pointer-events-none fixed z-50 px-3 py-2 bg-card border border-border rounded text-sm shadow-lg"
-          style={{
-            left: hover.x + 14,
-            top: hover.y + 14,
-            maxWidth: 320,
-          }}
+          className="pointer-events-none fixed z-50 px-3 py-2 bg-card border border-border rounded text-sm shadow-lg max-w-xs"
+          style={{ left: hover.x + 14, top: hover.y + 14 }}
         >
-          <div className="font-display text-base text-foreground">
+          <div className="font-display text-base text-foreground leading-tight">
             {hover.event.name}
           </div>
-          <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mt-1">
+          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground mt-1">
             {hover.event.type}
             {" · "}
-            {fmtYear(hover.event.dateStart)}
+            {fmtYear(hover.event.dateStart, hover.event.dateStartPrecision)}
             {hover.event.dateEnd != null
-              ? ` – ${fmtYear(hover.event.dateEnd)}`
+              ? ` – ${fmtYear(hover.event.dateEnd, hover.event.dateEndPrecision)}`
               : ""}
             {hover.event.tier >= 1 ? ` · T${hover.event.tier}` : ""}
           </div>
           {hover.event.civTags.length > 0 && (
-            <div className="font-mono text-[10px] text-accent mt-1">
-              {hover.event.civTags.join(" · ")}
+            <div className="font-mono text-[10px] text-accent/80 mt-1">
+              {hover.event.civTags.map(regionLabel).join(" · ")}
             </div>
           )}
         </div>

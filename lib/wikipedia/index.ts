@@ -25,9 +25,7 @@ export interface ArticleSummary {
   thumbnailUrl?: string;
 }
 
-function stripDiacritics(s: string): string {
-  return s.normalize("NFKD").replace(/[̀-ͯ]/g, "");
-}
+import { stripDiacritics } from "../format";
 
 async function fetchSummaryOnce(
   title: string,
