@@ -18,11 +18,14 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 interface Props {
-  params: { slug: string };
+  // In Next.js 15+ params is a Promise — failing to await it gives
+  // undefined for .slug and the query receives the wrong input.
+  params: Promise<{ slug: string }>;
 }
 
 export default async function Image({ params }: Props) {
-  const data = await getEntityBySlug(params.slug);
+  const { slug } = await params;
+  const data = await getEntityBySlug(slug);
 
   const name = data?.entity.name ?? "Alexandria";
   const dateRange = data

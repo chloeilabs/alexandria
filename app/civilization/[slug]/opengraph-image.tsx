@@ -16,12 +16,15 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 interface Props {
-  params: { slug: string };
+  // In Next.js 15+ params is a Promise — failing to await it gives
+  // undefined for .slug and the query receives the wrong input.
+  params: Promise<{ slug: string }>;
 }
 
 export default async function Image({ params }: Props) {
-  const data = await getCivilizationBySlug(params.slug);
-  const label = regionLabel(params.slug);
+  const { slug } = await params;
+  const data = await getCivilizationBySlug(slug);
+  const label = regionLabel(slug);
 
   const span =
     data && data.minYear != null && data.maxYear != null
