@@ -31,27 +31,44 @@ type RawRow = {
 } & Record<string, unknown>;
 
 export async function getTimelineEvents(): Promise<TimelineEvent[]> {
-  const rows = await db.execute<RawRow>(sql`
-    SELECT
-      e.qid,
-      e.slug,
-      e.name,
-      e.type,
-      e.tier,
-      e.date_start,
-      e.date_end,
-      e.date_start_precision,
-      e.date_end_precision,
-      COALESCE(
-        ARRAY_AGG(er.region_value) FILTER (WHERE er.region_kind = 'civilizational'),
-        ARRAY[]::varchar[]
-      ) AS civ_tags
-    FROM entities e
-    LEFT JOIN entity_regions er ON er.entity_qid = e.qid
-    WHERE e.date_start IS NOT NULL
-    GROUP BY e.qid
-    ORDER BY e.date_start ASC
-  `);
+  let rows: Awaited<ReturnType<typeof db.execute<RawRow>>>;
+  try {
+    rows = await db.execute<RawRow>(sql`
+      SELECT
+        e.qid,
+        e.slug,
+        e.name,
+        e.type,
+        e.tier,
+        e.date_start,
+        e.date_end,
+        e.date_start_precision,
+        e.date_end_precision,
+        COALESCE(
+          ARRAY_AGG(er.region_value) FILTER (WHERE er.region_kind = 'civilizational'),
+          ARRAY[]::varchar[]
+        ) AS civ_tags
+      FROM entities e
+      LEFT JOIN entity_regions er ON er.entity_qid = e.qid
+      WHERE e.date_start IS NOT NULL
+      GROUP BY e.qid
+      ORDER BY e.date_start ASC
+    `);
+  } catch (err) {
+    const e = err as Record<string, unknown>;
+    console.error("[getTimelineEvents] postgres error", {
+      message: e.message,
+      code: e.code,
+      severity: e.severity,
+      detail: e.detail,
+      hint: e.hint,
+      schema: e.schema_name,
+      table: e.table_name,
+      where: e.where,
+      query: e.query,
+    });
+    throw err;
+  }
 
   return Array.from(rows).map((r) => ({
     qid: r.qid,

@@ -259,25 +259,42 @@ export async function getFeaturedEntities(
   count = 12,
   maxPerRegion = 2,
 ): Promise<FeaturedEntity[]> {
-  const rows = await db.execute<FeaturedRow>(sql`
-    SELECT
-      e.qid,
-      e.slug,
-      e.name,
-      e.type,
-      e.tier,
-      e.date_start,
-      e.date_end,
-      e.summary,
-      COALESCE(
-        ARRAY_AGG(er.region_value) FILTER (WHERE er.region_kind = 'civilizational'),
-        ARRAY[]::varchar[]
-      ) AS civ_tags
-    FROM entities e
-    LEFT JOIN entity_regions er ON er.entity_qid = e.qid
-    WHERE e.tier >= 1
-    GROUP BY e.qid
-  `);
+  let rows: Awaited<ReturnType<typeof db.execute<FeaturedRow>>>;
+  try {
+    rows = await db.execute<FeaturedRow>(sql`
+      SELECT
+        e.qid,
+        e.slug,
+        e.name,
+        e.type,
+        e.tier,
+        e.date_start,
+        e.date_end,
+        e.summary,
+        COALESCE(
+          ARRAY_AGG(er.region_value) FILTER (WHERE er.region_kind = 'civilizational'),
+          ARRAY[]::varchar[]
+        ) AS civ_tags
+      FROM entities e
+      LEFT JOIN entity_regions er ON er.entity_qid = e.qid
+      WHERE e.tier >= 1
+      GROUP BY e.qid
+    `);
+  } catch (err) {
+    const e = err as Record<string, unknown>;
+    console.error("[getFeaturedEntities] postgres error", {
+      message: e.message,
+      code: e.code,
+      severity: e.severity,
+      detail: e.detail,
+      hint: e.hint,
+      schema: e.schema_name,
+      table: e.table_name,
+      where: e.where,
+      query: e.query,
+    });
+    throw err;
+  }
 
   // Group by primary tag (first civ tag); fallback bucket for untagged.
   const buckets = new Map<string, FeaturedEntity[]>();
