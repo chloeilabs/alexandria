@@ -69,6 +69,7 @@ export interface EntityPageData {
     url: string;
     attribution: string;
     license: string;
+    caption: string | null;
   }>;
   /** Entities sharing at least one civilizational tag with this one. */
   regionPeers: RegionPeer[];
@@ -184,9 +185,11 @@ async function getEntityBySlugInner(
       url: media.commonsUrl,
       attribution: media.attribution,
       license: media.license,
+      caption: media.caption,
     })
     .from(media)
-    .where(eq(media.entityQid, entity.qid));
+    .where(eq(media.entityQid, entity.qid))
+    .orderBy(asc(media.id));
 
   // Civilizational tags for this entity → other entities sharing any tag.
   const civTagsRows = await db
