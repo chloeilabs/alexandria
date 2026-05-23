@@ -5,6 +5,8 @@ export const metadata = {
   title: "Timeline · Alexandria",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function TimelineRoute() {
   const events = await getTimelineEvents();
   return (

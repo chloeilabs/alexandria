@@ -5,6 +5,8 @@ export const metadata = {
   title: "Map · Alexandria",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function MapRoute() {
   const markers = await getMapMarkers();
   return (

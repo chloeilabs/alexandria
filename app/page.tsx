@@ -5,6 +5,12 @@ import {
 } from "@/lib/db/queries/entity";
 import { fmtYear, regionLabel } from "@/lib/format";
 
+// Force per-request rendering. The DB lives off the build VM (Neon),
+// so static prerender would either fail or capture stale state. We'd
+// rather render fresh per request and let Next's runtime cache layer
+// (or our own ts_headline-based search hits) handle freshness.
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const [featured, allEntities] = await Promise.all([
     getFeaturedEntities(12, 2),

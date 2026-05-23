@@ -5,6 +5,8 @@ export const metadata = {
   title: "Connections · Alexandria",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function GraphRoute() {
   const data = await getGraphData();
   return (

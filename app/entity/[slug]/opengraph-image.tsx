@@ -12,6 +12,7 @@ import {
 export const alt = "Alexandria";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
+export const dynamic = "force-dynamic";
 
 interface Props {
   params: { slug: string };
