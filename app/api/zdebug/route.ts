@@ -4,6 +4,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { entities } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +28,9 @@ export async function GET() {
     const rows = await db.execute<{ n: number }>(
       sql`SELECT COUNT(*)::int AS n FROM entities`,
     );
-    result.entitiesCount = rows[0]?.n ?? null;
+    result.rawEntitiesCount = rows[0]?.n ?? null;
   } catch (e) {
-    result.entitiesError = e instanceof Error ? e.message : String(e);
+    result.rawEntitiesError = e instanceof Error ? e.message : String(e);
   }
 
   try {
@@ -39,6 +40,33 @@ export async function GET() {
     result.tables = rows.map((r) => r.table_name);
   } catch (e) {
     result.tablesError = e instanceof Error ? e.message : String(e);
+  }
+
+  try {
+    const rows = await db.execute<{ p: string }>(sql`SHOW search_path`);
+    result.searchPath = rows[0]?.p ?? null;
+  } catch (e) {
+    result.searchPathError = e instanceof Error ? e.message : String(e);
+  }
+
+  try {
+    const rows = await db.execute<{ db: string; usr: string }>(
+      sql`SELECT current_database() AS db, current_user AS usr`,
+    );
+    result.identity = rows[0] ?? null;
+  } catch (e) {
+    result.identityError = e instanceof Error ? e.message : String(e);
+  }
+
+  // The actual failing path: Drizzle query builder from(entities)
+  try {
+    const rows = await db.select({ qid: entities.qid }).from(entities).limit(1);
+    result.drizzleSelect = { ok: true, sample: rows[0]?.qid ?? null };
+  } catch (e) {
+    result.drizzleSelect = {
+      ok: false,
+      message: e instanceof Error ? e.message : String(e),
+    };
   }
 
   return NextResponse.json(result);
