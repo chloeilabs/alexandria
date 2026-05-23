@@ -3,7 +3,7 @@
 // bulk ingestion of millions of articles, use the streaming XML dump
 // parser instead (pipeline/bulk/import-wikipedia-dump.ts).
 
-import "dotenv/config";
+import "../env";
 
 const REST_BASE = "https://en.wikipedia.org/api/rest_v1";
 const ACTION_BASE = "https://en.wikipedia.org/w/api.php";

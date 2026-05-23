@@ -37,6 +37,9 @@ export function summarizePrompt(input: SummarizeInput) {
   return {
     model: MODEL_FLASH,
     maxOutputTokens: 600,
+    // Disable Gemini's "thinking" reasoning — for stub-to-summary we want
+    // the model to write directly, not deliberate (and burn output tokens).
+    providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
     system: SYSTEM,
     prompt: `Subject: ${input.name}${datesLine}
 Type: ${input.type}

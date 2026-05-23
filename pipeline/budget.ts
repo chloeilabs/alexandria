@@ -3,7 +3,7 @@
 // If today's spend + estimated would exceed DAILY_BUDGET_USD, throws
 // `BudgetExceeded` and the pipeline pauses (pg-boss retries with backoff).
 
-import "dotenv/config";
+import "../lib/env";
 import { sql } from "drizzle-orm";
 import { db } from "../lib/db";
 

@@ -10,7 +10,7 @@
  *   pnpm tsx scripts/enrich-sample.ts
  *   pnpm tsx scripts/enrich-sample.ts Q1048 Q237
  */
-import "dotenv/config";
+import "../lib/env";
 import { summarizeEntity } from "../pipeline/workers/summarize";
 import { db } from "../lib/db";
 

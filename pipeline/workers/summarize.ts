@@ -4,7 +4,7 @@
 // Budget-gated: every call estimates cost and aborts if DAILY_BUDGET_USD
 // would be breached.
 
-import "dotenv/config";
+import "../../lib/env";
 import { generateText } from "ai";
 import { eq } from "drizzle-orm";
 

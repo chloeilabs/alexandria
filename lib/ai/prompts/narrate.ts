@@ -90,6 +90,10 @@ export function narratePrompt(input: NarrateInput) {
   return {
     model: MODEL_FLASH,
     maxOutputTokens: 2500,
+    // Disable thinking — multi-source synthesis is constrained enough that
+    // the model writes well without reasoning, and we save 5-10x on output
+    // tokens. Re-enable if calibration prose feels shallow.
+    providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
     system: SYSTEM,
     prompt: `Subject: ${input.name}${datesLine}
 Type: ${input.type}

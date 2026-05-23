@@ -60,6 +60,8 @@ export function factCheckPrompt(input: FactCheckInput) {
   return {
     model: MODEL_FLASH,
     maxOutputTokens: 1500,
+    // Disable thinking — structured output is more deterministic without it.
+    providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
     system: SYSTEM,
     prompt: `Subject: ${input.name}
 

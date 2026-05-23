@@ -4,7 +4,7 @@
 // On first start, pg-boss creates its own `pgboss` schema with tables for
 // jobs, schedules, archive, etc. Subsequent starts are no-ops.
 
-import "dotenv/config";
+import "../lib/env";
 import { PgBoss } from "pg-boss";
 
 const connectionString =

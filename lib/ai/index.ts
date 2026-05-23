@@ -8,7 +8,7 @@
 // Update PRICING when re-baselining; current values fetched from
 // https://ai-gateway.vercel.sh/v1/models (2026-05-22).
 
-import "dotenv/config";
+import "../env";
 
 if (!process.env.AI_GATEWAY_API_KEY && process.env.NODE_ENV !== "test") {
   console.warn(

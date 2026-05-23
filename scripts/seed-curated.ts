@@ -18,7 +18,7 @@
  * Usage:
  *   pnpm tsx scripts/seed-curated.ts
  */
-import "dotenv/config";
+import "../lib/env";
 
 import { db } from "../lib/db";
 import {

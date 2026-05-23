@@ -7,7 +7,7 @@
  * Run as: `pnpm pipeline`
  * Stop:   Ctrl+C (graceful — waits for in-flight jobs to finish)
  */
-import "dotenv/config";
+import "../lib/env";
 import { eq, sql } from "drizzle-orm";
 
 import { db } from "../lib/db";

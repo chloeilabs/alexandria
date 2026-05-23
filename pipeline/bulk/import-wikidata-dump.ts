@@ -15,7 +15,7 @@
  * NOTHING upserts make re-inserts cheap. The checkpoint table tracks
  * progress purely for telemetry, not for skip-ahead (bz2 is not seekable).
  */
-import "dotenv/config";
+import "../../lib/env";
 import fs from "node:fs";
 import readline from "node:readline";
 // @ts-expect-error — unbzip2-stream has no types
