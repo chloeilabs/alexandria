@@ -1,3 +1,7 @@
+# Container + volume names retain the legacy "library-of-alexandria" prefix
+# for data-stability reasons (renaming the volume would create a fresh empty
+# DB and lose the corpus). The product is "Alexandria"; these are just
+# infrastructure identifiers.
 services:
   postgres:
     image: pgvector/pgvector:pg17

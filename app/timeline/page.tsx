@@ -2,7 +2,7 @@ import { Timeline } from "@/components/timeline/Timeline";
 import { getTimelineEvents } from "@/lib/db/queries/timeline";
 
 export const metadata = {
-  title: "Timeline · The Library of Alexandria",
+  title: "Timeline · Alexandria",
 };
 
 export default async function TimelineRoute() {

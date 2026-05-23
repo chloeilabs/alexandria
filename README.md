@@ -1,8 +1,10 @@
-# The Library of Alexandria, Reborn
+# Alexandria
 
 A living digital encyclopedia of human civilization — comprehensive, narrative, and visually navigable. Built locally, for one developer, with a continuously-running ingestion pipeline that grows the corpus daily.
 
 > _Wikipedia meets Google Earth meets a museum tour, with the soul of Cosmos and the rigor of a graduate seminar._
+
+The project's working directory and Docker container/volume names retain the original "library-of-alexandria" naming for stability — they're infrastructure, not branding. Renaming the volume would destroy the Postgres data.
 
 ## Local-only project
 

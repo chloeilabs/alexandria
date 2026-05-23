@@ -9,7 +9,7 @@ import {
   regionLabel,
 } from "@/lib/format";
 
-export const alt = "The Library of Alexandria";
+export const alt = "Alexandria";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -20,7 +20,7 @@ interface Props {
 export default async function Image({ params }: Props) {
   const data = await getEntityBySlug(params.slug);
 
-  const name = data?.entity.name ?? "The Library of Alexandria";
+  const name = data?.entity.name ?? "Alexandria";
   const dateRange = data
     ? fmtDateRange(
         data.entity.dateStart,
@@ -83,7 +83,7 @@ export default async function Image({ params }: Props) {
             zIndex: 1,
           }}
         >
-          The Library of Alexandria
+          Alexandria
         </div>
 
         {/* Title block */}

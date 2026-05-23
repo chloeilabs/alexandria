@@ -2,7 +2,7 @@ import { HistoryMap } from "@/components/map/HistoryMap";
 import { getMapMarkers } from "@/lib/db/queries/map";
 
 export const metadata = {
-  title: "Map · The Library of Alexandria",
+  title: "Map · Alexandria",
 };
 
 export default async function MapRoute() {

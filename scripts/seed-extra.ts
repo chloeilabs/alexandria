@@ -34,7 +34,7 @@ import {
 
 const UA =
   process.env.WIKIMEDIA_USER_AGENT ??
-  "LibraryOfAlexandria/0.1 (local development; contact: andrestran@icloud.com)";
+  "Alexandria/0.1 (local development; contact: andrestran@icloud.com)";
 
 const EXTRA: string[] = [
   // Unblock Hannibal -> Carthage -> Punic Wars -> Roman Republic

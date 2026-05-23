@@ -18,7 +18,7 @@ export function SiteNav() {
           href="/"
           className="font-display italic text-base text-foreground hover:text-accent transition-colors whitespace-nowrap"
         >
-          The Library of Alexandria
+          Alexandria
         </Link>
         <ul className="flex items-center gap-6">
           {LINKS.map((l) => (

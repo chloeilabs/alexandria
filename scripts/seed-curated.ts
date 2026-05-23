@@ -40,7 +40,7 @@ import {
 
 const UA =
   process.env.WIKIMEDIA_USER_AGENT ??
-  "LibraryOfAlexandria/0.1 (local development; contact: andrestran@icloud.com)";
+  "Alexandria/0.1 (local development; contact: andrestran@icloud.com)";
 
 interface CuratedItem {
   wikipediaTitle: string;

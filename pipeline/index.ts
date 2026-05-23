@@ -47,7 +47,7 @@ async function enqueueTier0(): Promise<number> {
 }
 
 async function main(): Promise<void> {
-  console.log("Booting The Library of Alexandria pipeline…\n");
+  console.log("Booting Alexandria pipeline…\n");
   await startQueue();
   await registerWorkers();
 

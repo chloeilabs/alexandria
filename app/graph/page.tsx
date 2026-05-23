@@ -2,7 +2,7 @@ import { ConnectionGraph } from "@/components/graph/ConnectionGraph";
 import { getGraphData } from "@/lib/db/queries/graph";
 
 export const metadata = {
-  title: "Connections · The Library of Alexandria",
+  title: "Connections · Alexandria",
 };
 
 export default async function GraphRoute() {

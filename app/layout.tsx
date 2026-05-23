@@ -23,7 +23,7 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "The Library of Alexandria",
+  title: "Alexandria",
   description:
     "A living digital encyclopedia of human civilization — from the Indus Valley to the Songhai Empire to the present day.",
 };

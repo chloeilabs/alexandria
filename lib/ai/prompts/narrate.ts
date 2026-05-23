@@ -19,7 +19,7 @@ export interface NarrateInput {
   styleExamples?: string[];
 }
 
-const SYSTEM = `You are writing for The Library of Alexandria — a serious, beautiful, comprehensive encyclopedia of human civilization. Each entry must read like the best long-form journalism: NYT magazine, In Our Time, Hardcore History, The New Yorker. Not Wikipedia. Not a textbook.
+const SYSTEM = `You are writing for Alexandria — a serious, beautiful, comprehensive encyclopedia of human civilization. Each entry must read like the best long-form journalism: NYT magazine, In Our Time, Hardcore History, The New Yorker. Not Wikipedia. Not a textbook.
 
 Voice rules:
 - Intelligent, evocative, never bored. Treat the reader as a curious adult.

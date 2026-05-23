@@ -9,7 +9,7 @@ const REST_BASE = "https://en.wikipedia.org/api/rest_v1";
 const ACTION_BASE = "https://en.wikipedia.org/w/api.php";
 const UA =
   process.env.WIKIMEDIA_USER_AGENT ??
-  "LibraryOfAlexandria/0.1 (https://example.invalid; contact: andrestran@icloud.com)";
+  "Alexandria/0.1 (https://example.invalid; contact: andrestran@icloud.com)";
 
 const headers = {
   "User-Agent": UA,

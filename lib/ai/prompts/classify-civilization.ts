@@ -36,7 +36,7 @@ export interface ClassifyCivilizationInput {
   aliases: string[]; // a few aliases help disambiguate non-English names
 }
 
-const SYSTEM = `You assign civilizational tags to entities in The Library of Alexandria. The tag list is global and intentionally lean toward non-Western buckets — do NOT over-assign Western tags to non-Western subjects, and prefer the most specific bucket. If nothing in the closed list fits clearly, return an empty array. Use at most 3 tags, typically 1-2.`;
+const SYSTEM = `You assign civilizational tags to entities in Alexandria. The tag list is global and intentionally lean toward non-Western buckets — do NOT over-assign Western tags to non-Western subjects, and prefer the most specific bucket. If nothing in the closed list fits clearly, return an empty array. Use at most 3 tags, typically 1-2.`;
 
 function fmtDateRange(start: number | null, end: number | null): string {
   if (start == null) return "(no dates)";

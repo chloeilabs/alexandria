@@ -21,7 +21,7 @@ export default async function Home() {
     <main className="min-h-screen">
       <section className="max-w-3xl mx-auto px-6 pt-28 pb-20">
         <h1 className="font-display font-light text-6xl md:text-7xl leading-none tracking-tight text-foreground">
-          The Library of Alexandria
+          Alexandria
         </h1>
         <p className="mt-6 font-display italic text-2xl text-muted-foreground max-w-xl leading-snug">
           A living digital encyclopedia of human civilization. Begin

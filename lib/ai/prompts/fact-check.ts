@@ -35,7 +35,7 @@ export interface FactCheckInput {
   sources: NarrateSource[];
 }
 
-const SYSTEM = `You are the fact-check pass for The Library of Alexandria. You receive a narrative and the sources it was supposedly derived from. Your job: find every factual claim in the narrative that is NOT grounded in the sources, OR that the sources contradict.
+const SYSTEM = `You are the fact-check pass for Alexandria. You receive a narrative and the sources it was supposedly derived from. Your job: find every factual claim in the narrative that is NOT grounded in the sources, OR that the sources contradict.
 
 Be precise. Be conservative. Only flag claims that are:
 - "missing": the source does not contain this fact at all, AND it's a specific, falsifiable claim (date, number, quote, name, place, cause). General context that ANY informed person would know is fine.

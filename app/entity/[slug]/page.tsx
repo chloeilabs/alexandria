@@ -17,7 +17,7 @@ export async function generateMetadata({
   const description =
     data.entity.summary?.slice(0, 160) ?? `Read about ${data.entity.name}.`;
   return {
-    title: `${data.entity.name} · The Library of Alexandria`,
+    title: `${data.entity.name} · Alexandria`,
     description,
     openGraph: {
       title: data.entity.name,
