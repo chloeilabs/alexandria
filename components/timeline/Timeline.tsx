@@ -254,15 +254,19 @@ export function Timeline({ events }: Props) {
     if (!svg) return;
     const muted = color("muted");
     select(svg).selectAll("*").remove();
+    // Tick density adapts to width so labels don't collide. Each label is
+    // ~70px wide ("3500 BCE"); aim for at most one tick per ~110px.
+    const tickCount = Math.max(2, Math.min(10, Math.floor(size.width / 130)));
     const ax = axisBottom(x)
-      .ticks(8)
+      .ticks(tickCount)
       .tickFormat((d: number | { valueOf(): number }) => fmtYear(Number(d)));
     const g = select(svg).append("g").attr("transform", `translate(0, 0)`).call(ax);
     g.selectAll("path,line").attr("stroke", muted).attr("opacity", 0.4);
     g.selectAll("text")
       .attr("fill", muted)
       .attr("font-family", "JetBrains Mono, ui-monospace, monospace")
-      .attr("font-size", "10px");
+      .attr("font-size", "10px")
+      .attr("letter-spacing", "0.08em");
   }, [x, size.width]);
 
   const handleMouseMove = useCallback(

@@ -3,17 +3,17 @@
 // Tier-conditional structure:
 //   T0  — stub message, just name + dates + connections
 //   T1  — summary as primary, drop-capped first paragraph
-//   T2+ — narrative as primary, drop-capped first paragraph; summary is
-//         demoted to a brief epigraph above the narrative
+//   T2+ — narrative as primary, drop-capped first paragraph; the Tier 1
+//         summary is demoted to a brief italic epigraph above
 //
-// Visual rules (per DECISIONS.md): deep ink background, Cormorant Garamond
-// display headlines, aggressive whitespace, no card grids, no drop shadows,
-// no bouncy motion.
+// Visual rules (DECISIONS.md): deep ink background, Cormorant Garamond
+// display headlines, aggressive whitespace, no card grids, no drop shadows.
 
 import Link from "next/link";
 
 import type { EntityPageData } from "@/lib/db/queries/entity";
-import { fmtDateRange, fmtYear, regionLabel } from "@/lib/format";
+import { fmtDateRange, fmtYear, firstSentence } from "@/lib/format";
+import { renderInline } from "@/lib/markdown";
 import { labelFor } from "@/lib/wikidata/predicates";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -34,12 +34,11 @@ function splitParagraphs(text: string): string[] {
 
 interface ProseProps {
   paragraphs: string[];
-  className?: string;
 }
 
-function Prose({ paragraphs, className = "" }: ProseProps) {
+function Prose({ paragraphs }: ProseProps) {
   return (
-    <div className={`space-y-7 ${className}`}>
+    <div className="space-y-7">
       {paragraphs.map((p, i) => (
         <p
           key={i}
@@ -49,7 +48,7 @@ function Prose({ paragraphs, className = "" }: ProseProps) {
               : "text-lg leading-[1.85] text-foreground"
           }
         >
-          {p}
+          {renderInline(p)}
         </p>
       ))}
     </div>
@@ -73,6 +72,14 @@ export function EntityPage({ data }: { data: EntityPageData }) {
         ? splitParagraphs(entity.summary)
         : null;
 
+  // Tier 2: a clean first-sentence epigraph from the summary.
+  const epigraph =
+    entity.tier >= 2 && entity.narrative && entity.summary
+      ? firstSentence(entity.summary, 280)
+      : null;
+
+  const hasConnections = related.length > 0 || orphanTargets.length > 0;
+
   return (
     <article className="min-h-screen pb-32">
       {/* Header */}
@@ -85,11 +92,16 @@ export function EntityPage({ data }: { data: EntityPageData }) {
           {entity.name}
         </h1>
         {aliases.length > 0 && (
-          <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-1 font-display italic text-lg text-muted-foreground">
-            {aliases.slice(0, 6).map((a) => (
-              <li key={`${a.alias}-${a.language}`}>{a.alias}</li>
-            ))}
-          </ul>
+          <div className="mt-8 grid grid-cols-[7rem_1fr] gap-x-6 gap-y-1 items-baseline">
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80">
+              Also known as
+            </span>
+            <ul className="flex flex-wrap gap-x-5 gap-y-1 font-display italic text-lg text-muted-foreground">
+              {aliases.slice(0, 6).map((a) => (
+                <li key={`${a.alias}-${a.language}`}>{a.alias}</li>
+              ))}
+            </ul>
+          </div>
         )}
       </header>
 
@@ -105,58 +117,64 @@ export function EntityPage({ data }: { data: EntityPageData }) {
         </section>
       )}
 
-      {/* Tier 2+: brief epigraph (the Tier 1 summary, used as TL;DR) */}
-      {entity.tier >= 2 && entity.narrative && entity.summary && (
+      {/* Tier 2: brief epigraph (one sentence of the Tier 1 summary). */}
+      {epigraph && (
         <section className="max-w-3xl mx-auto px-6 pb-10">
           <p className="font-display italic text-xl leading-relaxed text-muted-foreground border-l-2 border-accent/40 pl-5">
-            {entity.summary.slice(0, 260)}
-            {entity.summary.length > 260 ? "…" : ""}
+            {renderInline(epigraph)}
           </p>
         </section>
       )}
 
-      {/* Primary prose: narrative if T2+, else summary if T1 */}
+      {/* Primary prose: narrative if T2+, else summary if T1. */}
       {primaryText && (
         <section className="max-w-3xl mx-auto px-6 py-4">
           <Prose paragraphs={primaryText} />
         </section>
       )}
 
-      {/* Connections */}
-      {related.length > 0 && (
+      {/* Connections — always shown if any in-DB or orphan refs exist. */}
+      {hasConnections && (
         <section className="max-w-3xl mx-auto px-6 pt-20 pb-2">
           <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-8 border-t border-border pt-8">
             Connected to
           </h2>
-          <ul className="space-y-4">
-            {related.map((r, i) => {
-              const lbl = labelFor(r.predicate, r.direction);
-              return (
-                <li
-                  key={`${r.entity.qid}-${r.predicate}-${r.direction}-${i}`}
-                  className="grid grid-cols-[12rem_1fr] gap-4 items-baseline"
-                >
-                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                    {lbl}
-                  </span>
-                  <Link
-                    href={`/entity/${r.entity.slug}`}
-                    className="font-display text-xl text-foreground hover:text-accent transition-colors group flex items-baseline gap-3 flex-wrap"
+          {related.length > 0 ? (
+            <ul className="space-y-4">
+              {related.map((r, i) => {
+                const lbl = labelFor(r.predicate, r.direction);
+                return (
+                  <li
+                    key={`${r.entity.qid}-${r.predicate}-${r.direction}-${i}`}
+                    className="grid grid-cols-[12rem_1fr] gap-4 items-baseline"
                   >
-                    <span className="group-hover:underline underline-offset-4 decoration-1">
-                      {r.entity.name}
+                    <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      {lbl}
                     </span>
-                    {r.entity.dateStart != null && (
-                      <span className="font-mono text-[10px] text-muted-foreground">
-                        {fmtYear(r.entity.dateStart, r.entity.dateStartPrecision)}
+                    <Link
+                      href={`/entity/${r.entity.slug}`}
+                      className="font-display text-xl text-foreground hover:text-accent transition-colors group flex items-baseline gap-3 flex-wrap focus:outline-none focus-visible:text-accent focus-visible:underline focus-visible:underline-offset-4"
+                    >
+                      <span className="group-hover:underline underline-offset-4 decoration-1">
+                        {r.entity.name}
                       </span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-          {orphanTargets.length > 0 && (
+                      {r.entity.dateStart != null && (
+                        <span className="font-mono text-[10px] text-muted-foreground">
+                          {fmtYear(r.entity.dateStart, r.entity.dateStartPrecision)}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="font-display italic text-muted-foreground text-lg leading-relaxed">
+              {orphanTargets.length} link{orphanTargets.length === 1 ? "" : "s"}
+              {" to entries not yet ingested in the Library."}
+            </p>
+          )}
+          {related.length > 0 && orphanTargets.length > 0 && (
             <p className="mt-8 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/70">
               + {orphanTargets.length} further connection
               {orphanTargets.length === 1 ? "" : "s"} to entries not yet
@@ -181,7 +199,7 @@ export function EntityPage({ data }: { data: EntityPageData }) {
                     href={s.url}
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="text-accent/70 hover:text-accent transition-colors underline decoration-dotted underline-offset-2"
+                    className="text-accent/70 hover:text-accent transition-colors underline decoration-dotted underline-offset-2 focus:outline-none focus-visible:text-accent"
                   >
                     view source
                   </a>
@@ -193,13 +211,6 @@ export function EntityPage({ data }: { data: EntityPageData }) {
             ))}
           </ul>
         </footer>
-      )}
-
-      {/* Civilizational context tag — only shown if related entity has them */}
-      {related.length > 0 && related[0]?.entity.qid && (
-        <p className="sr-only">
-          {regionLabel(related[0].entity.type)} context
-        </p>
       )}
     </article>
   );

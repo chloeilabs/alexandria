@@ -21,7 +21,9 @@ export function fmtYear(
     case "decade":
       return `${y}s ${era}`;
     case "century": {
-      const c = Math.floor(y / 100) + 1;
+      // 1-100 = 1st c., 101-200 = 2nd c., etc. (year 100 belongs to 1st c.,
+      // year 900 BCE belongs to 9th c. BCE — not 10th).
+      const c = Math.floor((y - 1) / 100) + 1;
       return `${c}${ordinalSuffix(c)} c. ${era}`;
     }
     case "millennium":
@@ -55,13 +57,56 @@ export function eraFor(year: number | null | undefined): string {
   return "Modern";
 }
 
-/** Slugified region label → presentation label ("west-african-empires" → "West African Empires"). */
+// Words that stay lowercase in title-cased labels (common Chicago/AP rules).
+const LOWER_WORDS = new Set([
+  "and",
+  "of",
+  "the",
+  "in",
+  "on",
+  "to",
+  "for",
+  "a",
+  "an",
+  "but",
+  "or",
+  "nor",
+]);
+
+/**
+ * Slugified region label → presentation label.
+ * "west-african-empires" → "West African Empires"
+ * "vedic-and-mauryan" → "Vedic and Mauryan"
+ * "delhi-sultanate-and-mughal" → "Delhi Sultanate and Mughal"
+ * Always capitalizes the first word regardless of LOWER_WORDS.
+ */
 export function regionLabel(slug: string | null | undefined): string {
   if (!slug) return "";
   return slug
     .split("-")
-    .map((w) => (w.length === 0 ? "" : w[0]!.toUpperCase() + w.slice(1)))
+    .map((w, i) => {
+      if (w.length === 0) return "";
+      if (i > 0 && LOWER_WORDS.has(w)) return w;
+      return w[0]!.toUpperCase() + w.slice(1);
+    })
     .join(" ");
+}
+
+/**
+ * Return the first complete sentence of a longer block of prose.
+ * Used by the entity page to derive a clean epigraph from the Tier 1
+ * summary without truncating mid-word.
+ */
+export function firstSentence(text: string, maxLen = 260): string {
+  const trimmed = text.trim();
+  // Sentence-end: ., !, ? followed by space + capital letter OR end of input.
+  const m = trimmed.match(/^([\s\S]+?[.!?])(?:\s+[A-Z(])/);
+  if (m && m[1] && m[1].length <= maxLen) return m[1];
+  // Fallback: cap at maxLen on a word boundary.
+  if (trimmed.length <= maxLen) return trimmed;
+  const slice = trimmed.slice(0, maxLen);
+  const lastSpace = slice.lastIndexOf(" ");
+  return `${slice.slice(0, lastSpace > 0 ? lastSpace : maxLen)}…`;
 }
 
 /** Strip combining diacritical marks. */
