@@ -1,0 +1,43 @@
+# dependencies
+node_modules/
+.pnp/
+.pnp.*
+
+# next.js
+.next/
+out/
+build/
+dist/
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# environment
+.env
+.env.local
+.env*.local
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# misc
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project-specific
+media-cache/
+dumps/
+*.bz2
+*.xml.gz
+.drizzle/cache/
+
+# Local-only IDE settings
+.claude/

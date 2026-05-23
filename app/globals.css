@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  /* Surfaces — deep ink/charcoal with subtle warm undertone */
+  --color-background: oklch(0.18 0.01 250);
+  --color-foreground: oklch(0.96 0.005 80);
+
+  /* Accent — warm gold (Met Museum / period gilt) */
+  --color-accent: oklch(0.78 0.13 80);
+  --color-accent-foreground: oklch(0.18 0.01 250);
+
+  /* Muted — for secondary text and surfaces */
+  --color-muted: oklch(0.24 0.008 250);
+  --color-muted-foreground: oklch(0.72 0.012 80);
+
+  /* Borders — barely visible, intentionally restrained */
+  --color-border: oklch(0.28 0.006 250);
+
+  /* Card / panel surface, slightly elevated from background */
+  --color-card: oklch(0.21 0.009 250);
+  --color-card-foreground: oklch(0.96 0.005 80);
+
+  /* Type families — wired via Next.js font system in layout.tsx */
+  --font-display: var(--font-cormorant), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  html {
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background: var(--color-background);
+    color: var(--color-foreground);
+  }
+
+  /* Aggressive whitespace by default — the brief calls for it */
+  ::selection {
+    background: var(--color-accent);
+    color: var(--color-accent-foreground);
+  }
+}
