@@ -156,6 +156,19 @@ export const TYPE_WHITELIST = new Map<string, EntityType>([
   ["Q13418847", "event"], // historical event
   ["Q12184", "event"], // pandemic
   ["Q3241045", "event"], // epidemic
+  ["Q10931", "event"], // revolution
+  ["Q1155622", "event"], // slave revolt
+  ["Q1827102", "event"], // crusade
+  ["Q17524420", "event"], // slave trade (specific)
+  ["Q1128340", "concept"], // religious movement
+  ["Q126288065", "concept"], // schism / reform movement
+  ["Q727002", "concept"], // constitutional document
+  ["Q93288", "concept"], // contract / charter
+  ["Q3117863", "place"], // archaeological culture
+  ["Q116795925", "concept"], // pre-Columbian civilization
+  ["Q6266", "organization"], // confederation
+  ["Q29428439", "organization"], // intergovernmental org variant
+  ["Q2738074", "event"], // war of independence
 
   // --- organization ---
   ["Q43229", "organization"], // organization
