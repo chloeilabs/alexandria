@@ -25,11 +25,11 @@ export interface ArticleSummary {
   thumbnailUrl?: string;
 }
 
-/**
- * Fetch a short summary (lead paragraph) of a Wikipedia article.
- * Returns null on 404; throws on other HTTP errors.
- */
-export async function fetchSummary(
+function stripDiacritics(s: string): string {
+  return s.normalize("NFKD").replace(/[̀-ͯ]/g, "");
+}
+
+async function fetchSummaryOnce(
   title: string,
 ): Promise<ArticleSummary | null> {
   const encoded = encodeURIComponent(title.replace(/ /g, "_"));
@@ -56,6 +56,21 @@ export async function fetchSummary(
   };
 }
 
+/**
+ * Fetch a short summary (lead paragraph). On 404, retries with diacritics
+ * stripped — picks up cases like "Sunjata Keïta" → "Sundiata Keita" where
+ * Wikidata's English label has diacritics the Wikipedia article doesn't.
+ */
+export async function fetchSummary(
+  title: string,
+): Promise<ArticleSummary | null> {
+  const first = await fetchSummaryOnce(title);
+  if (first) return first;
+  const stripped = stripDiacritics(title);
+  if (stripped !== title) return fetchSummaryOnce(stripped);
+  return null;
+}
+
 export interface ArticlePlaintext {
   title: string;
   pageid: number;
@@ -64,11 +79,7 @@ export interface ArticlePlaintext {
   wikibaseItem?: string;
 }
 
-/**
- * Fetch the full plain-text extract for an article (no markup, no images).
- * Use this when we want the entire article body for narrative generation.
- */
-export async function fetchPlaintext(
+async function fetchPlaintextOnce(
   title: string,
 ): Promise<ArticlePlaintext | null> {
   const params = new URLSearchParams({
@@ -103,6 +114,20 @@ export async function fetchPlaintext(
     url: `https://en.wikipedia.org/wiki/${encodeURIComponent(normTitle)}`,
     wikibaseItem: first.pageprops?.wikibase_item,
   };
+}
+
+/**
+ * Fetch the full plain-text extract. Falls back to a diacritic-stripped
+ * title if the first lookup misses — see fetchSummary for rationale.
+ */
+export async function fetchPlaintext(
+  title: string,
+): Promise<ArticlePlaintext | null> {
+  const first = await fetchPlaintextOnce(title);
+  if (first) return first;
+  const stripped = stripDiacritics(title);
+  if (stripped !== title) return fetchPlaintextOnce(stripped);
+  return null;
 }
 
 /**

@@ -156,3 +156,124 @@ export async function getAllEntitySlugs(limit = 200): Promise<
     .orderBy(sql`${entities.tier} DESC, ${entities.name} ASC`)
     .limit(limit);
 }
+
+export interface FeaturedEntity {
+  qid: string;
+  slug: string;
+  name: string;
+  type: string;
+  tier: number;
+  dateStart: number | null;
+  dateEnd: number | null;
+  summary: string | null;
+  civTags: string[];
+  primaryTag: string | null;
+  era: string;
+}
+
+type FeaturedRow = {
+  qid: string;
+  slug: string;
+  name: string;
+  type: string;
+  tier: number;
+  date_start: number | null;
+  date_end: number | null;
+  summary: string | null;
+  civ_tags: string[];
+} & Record<string, unknown>;
+
+function eraFor(year: number | null): string {
+  if (year == null) return "Undated";
+  if (year < -1000) return "Ancient";
+  if (year < 500) return "Classical";
+  if (year < 1500) return "Medieval";
+  if (year < 1800) return "Early Modern";
+  return "Modern";
+}
+
+/**
+ * Featured rotation: round-robin pick from civilizational tags so no
+ * region appears more than `maxPerRegion` times. Prefer higher-tier
+ * entities within each region. Returns ~`count` items.
+ */
+export async function getFeaturedEntities(
+  count = 12,
+  maxPerRegion = 2,
+): Promise<FeaturedEntity[]> {
+  const rows = await db.execute<FeaturedRow>(sql`
+    SELECT
+      e.qid,
+      e.slug,
+      e.name,
+      e.type,
+      e.tier,
+      e.date_start,
+      e.date_end,
+      e.summary,
+      COALESCE(
+        ARRAY_AGG(er.region_value) FILTER (WHERE er.region_kind = 'civilizational'),
+        ARRAY[]::varchar[]
+      ) AS civ_tags
+    FROM entities e
+    LEFT JOIN entity_regions er ON er.entity_qid = e.qid
+    WHERE e.tier >= 1
+    GROUP BY e.qid
+  `);
+
+  // Group by primary tag (first civ tag); fallback bucket for untagged.
+  const buckets = new Map<string, FeaturedEntity[]>();
+  for (const r of Array.from(rows)) {
+    const tags = r.civ_tags ?? [];
+    const primary = tags[0] ?? "uncategorised";
+    const e: FeaturedEntity = {
+      qid: r.qid,
+      slug: r.slug,
+      name: r.name,
+      type: r.type,
+      tier: r.tier,
+      dateStart: r.date_start,
+      dateEnd: r.date_end,
+      summary: r.summary,
+      civTags: tags,
+      primaryTag: tags[0] ?? null,
+      era: eraFor(r.date_start),
+    };
+    const arr = buckets.get(primary);
+    if (arr) arr.push(e);
+    else buckets.set(primary, [e]);
+  }
+  // Within each bucket: higher tier first, then alphabetical
+  for (const arr of buckets.values()) {
+    arr.sort(
+      (a, b) => b.tier - a.tier || a.name.localeCompare(b.name),
+    );
+  }
+  // Order buckets by size desc (so biggest civilizations contribute first)
+  // then alphabetical bucket name for stable ordering.
+  const bucketKeys = [...buckets.keys()].sort((a, b) => {
+    const sizeDiff = (buckets.get(b)?.length ?? 0) - (buckets.get(a)?.length ?? 0);
+    return sizeDiff !== 0 ? sizeDiff : a.localeCompare(b);
+  });
+
+  const featured: FeaturedEntity[] = [];
+  const seenPerRegion = new Map<string, number>();
+  let exhausted = false;
+  let pass = 0;
+  while (featured.length < count && !exhausted) {
+    exhausted = true;
+    for (const tag of bucketKeys) {
+      if (featured.length >= count) break;
+      const arr = buckets.get(tag);
+      if (!arr || pass >= arr.length) continue;
+      const used = seenPerRegion.get(tag) ?? 0;
+      if (used >= maxPerRegion) continue;
+      const candidate = arr[pass]!;
+      featured.push(candidate);
+      seenPerRegion.set(tag, used + 1);
+      exhausted = false;
+    }
+    pass += 1;
+  }
+  return featured;
+}

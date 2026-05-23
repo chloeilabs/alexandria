@@ -132,6 +132,10 @@ export const TYPE_WHITELIST = new Map<string, EntityType>([
   ["Q12280", "place"], // bridge
   ["Q12518", "place"], // tower
   ["Q4989906", "place"], // monument
+  ["Q15661340", "place"], // ancient city
+  ["Q133442", "place"], // ancient civilization
+  ["Q655593", "place"], // capital of ancient civilization
+  ["Q1907114", "place"], // ancient settlement
 
   // --- event ---
   ["Q178561", "event"], // battle
