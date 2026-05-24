@@ -28,14 +28,29 @@ import {
   factCheckPrompt,
   type FactCheckOutput,
 } from "../../lib/ai/prompts/fact-check";
+import { corroborateClaim, type ClaimCorroboration } from "../../lib/openalex";
 import { checkBudget } from "../budget";
 
 const SOURCE_CHAR_BUDGET = 9_000;
 
+// Opt-out: set DISABLE_OPENALEX_CORROBORATION=1 to skip the corroboration
+// step (e.g. for A/B comparing fact-check output before/after corroboration).
+const OPENALEX_DISABLED =
+  process.env.DISABLE_OPENALEX_CORROBORATION === "1";
+
+// Hard cap on how many findings get corroborated per entity. The
+// fact-check pass usually surfaces 0–4 findings; this guard protects
+// against pathological narratives generating dozens of flags.
+const MAX_CORROBORATIONS_PER_ENTITY = 8;
+
 export interface FactCheckResult {
   qid: string;
   status: "ok" | "clean" | "flagged" | "no_narrative" | "no_sources";
-  findings?: FactCheckOutput["findings"];
+  findings?: Array<
+    FactCheckOutput["findings"][number] & {
+      corroboration?: ClaimCorroboration;
+    }
+  >;
   costUsd?: number;
 }
 
@@ -129,12 +144,50 @@ export async function factCheckEntity(qid: string): Promise<FactCheckResult> {
   const outputTokens = result.usage.outputTokens ?? 0;
   const actualCost = estimateCostUsd(MODEL_FLASH, inputTokens, outputTokens);
 
+  // Corroborate each finding against OpenAlex's ~315M scholarly works.
+  // A finding the model "flagged as missing" that actually has 25+ cited
+  // peer-reviewed works behind it is a near-certain false positive —
+  // worth surfacing so editorial review can deprioritise. Idempotent
+  // per-run, additive-only to the flagged_claims payload; no schema
+  // change.
+  type EnrichedFinding = FactCheckOutput["findings"][number] & {
+    corroboration?: ClaimCorroboration;
+  };
+  let enrichedFindings: EnrichedFinding[] = findings;
+  if (!OPENALEX_DISABLED && findings.length > 0) {
+    enrichedFindings = await Promise.all(
+      findings.slice(0, MAX_CORROBORATIONS_PER_ENTITY).map(async (f) => {
+        try {
+          // No year filter — corroboration wants modern scholarship ABOUT
+          // the subject, not primary sources FROM their lifetime. The
+          // entity's BCE dates would also silently break the filter.
+          const corroboration = await corroborateClaim(entity.name, f.claim, {
+            limit: 3,
+          });
+          return { ...f, corroboration };
+        } catch (err) {
+          console.warn(
+            `[fact-check] openalex corroboration failed for ${qid} claim "${f.claim.slice(0, 60)}…"`,
+            err,
+          );
+          return f;
+        }
+      }),
+    );
+    // Append any findings past the cap unchanged so we never drop data.
+    if (findings.length > MAX_CORROBORATIONS_PER_ENTITY) {
+      enrichedFindings = enrichedFindings.concat(
+        findings.slice(MAX_CORROBORATIONS_PER_ENTITY),
+      );
+    }
+  }
+
   await db.transaction(async (tx) => {
     await tx.insert(factCheckReviews).values({
       entityQid: qid,
       model: MODEL_FLASH,
       status,
-      flaggedClaims: findings,
+      flaggedClaims: enrichedFindings,
     });
     await tx.insert(pipelineRuns).values({
       jobKind: "fact-check",
@@ -146,5 +199,5 @@ export async function factCheckEntity(qid: string): Promise<FactCheckResult> {
     });
   });
 
-  return { qid, status, findings, costUsd: actualCost };
+  return { qid, status, findings: enrichedFindings, costUsd: actualCost };
 }
