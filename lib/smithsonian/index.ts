@@ -54,7 +54,16 @@ interface SearchHit {
       unit_name?: string;
       record_link?: string;
       online_media?: {
-        media?: Array<{ type?: string; content?: string; thumbnail?: string }>;
+        media?: Array<{
+          type?: string;
+          content?: string;
+          thumbnail?: string;
+          /** Per-media usage block — `usage.access` is "CC0" for public-
+           *  domain assets. There is NO top-level `online_media_rights`
+           *  filter on the search endpoint despite what some docs suggest;
+           *  CC0 has to be validated per-media in the normaliser. */
+          usage?: { access?: string };
+        }>;
       };
     };
     indexedStructured?: {
@@ -78,10 +87,15 @@ function normalize(hit: SearchHit): SmithsonianObject | null {
   if (!title) return null;
 
   // Smithsonian online_media is a list of media records; we want the
-  // first IMAGE entry. Some hits have no image at all.
+  // first CC0-licensed IMAGE. usage.access carries the rights string
+  // per-media; if it's not "CC0" the asset is non-redistributable and
+  // we skip it to keep the media table CC0-clean.
   const mediaList = descr?.online_media?.media ?? [];
   const image = mediaList.find(
-    (m) => (m.type ?? "").toLowerCase() === "images" && (m.content || m.thumbnail),
+    (m) =>
+      (m.type ?? "").toLowerCase() === "images" &&
+      (m.content || m.thumbnail) &&
+      (m.usage?.access ?? "").toUpperCase() === "CC0",
   );
   if (!image) return null;
   const imageUrl = image.content ?? image.thumbnail;
@@ -115,13 +129,14 @@ export async function searchObjects(
   if (!API_KEY) return [];
   const limit = Math.max(1, opts.limit ?? 3);
 
-  // Restrict to public-image-bearing records. The `online_media_type`
-  // filter narrows to objects with images; `online_media_rights` to
-  // CC0 / public domain content.
+  // Restrict to image-bearing records via the `online_media_type`
+  // filter. CC0 rights cannot be filtered server-side — the field
+  // (`online_media_rights:CC0`) silently matches nothing on the
+  // search endpoint despite the name. Validate per-media in the
+  // normaliser by checking each media's `usage.access == "CC0"`.
   const q = [
     `"${entityName.replace(/"/g, '')}"`,
     "online_media_type:Images",
-    "online_media_rights:CC0",
   ].join(" AND ");
 
   const params = new URLSearchParams({
