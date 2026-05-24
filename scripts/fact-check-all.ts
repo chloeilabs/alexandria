@@ -1,8 +1,8 @@
 #!/usr/bin/env tsx
 /**
  * Run the fact-check worker on every Tier 2 entity that hasn't been
- * reviewed yet. Sequential — at ~$0.005-0.01/entity, 340 entries ≈
- * $1.70-3.40 total, well inside the daily budget cap.
+ * reviewed yet. Sequential — at ~$0.005-0.01/entity, the current Tier 2
+ * corpus is well inside the daily budget cap.
  *
  * Usage:
  *   pnpm tsx scripts/fact-check-all.ts

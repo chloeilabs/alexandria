@@ -1,6 +1,6 @@
 # Alexandria — agent guide
 
-A living digital encyclopedia of human civilization. Tier 0 (Wikidata stub) → Tier 3 (hand-curated). Live at https://alexandria-chloei.vercel.app. Source of truth for project decisions is `DECISIONS.md`; for what's verified-working is `VERIFICATION.md`; for unresolved questions is `OPEN_QUESTIONS.md`. Read those first when you need history.
+A living digital encyclopedia of human civilization. Tier 0 (Wikidata stub) → Tier 3 (hand-curated). Live at https://alexandria-chloei.vercel.app. Source of truth for project decisions is `DECISIONS.md`; for what's verified-working is `VERIFICATION.md`; for editorial questions and resolved-question breadcrumbs is `OPEN_QUESTIONS.md`. Read those first when you need history.
 
 ## Hard rules (non-negotiable)
 
@@ -53,12 +53,15 @@ The bridge from bulk → Neon is `scripts/promote-from-bulk.ts` — picks specif
 `lib/env.ts` only reads `.env.local` and `.env`. Production env vars live in `.env.prod` (gitignored). When running any TS script against Neon from a local shell:
 
 ```bash
-DATABASE_URL=$(grep -E '^DATABASE_URL=' .env.prod | head -1 | sed 's/^DATABASE_URL=//' | tr -d '"') pnpm tsx <script>
+set -a
+source .env.prod
+set +a
+pnpm tsx <script>
 ```
 
-Without that prefix, scripts hit local Docker (the fallback in `lib/db/index.ts`).
+Without loading `.env.prod` or explicitly exporting `DATABASE_URL`, scripts hit local Docker (the fallback in `lib/db/index.ts`).
 
-`AI_GATEWAY_API_KEY` lives in `.env.prod` too. The `[ai] AI_GATEWAY_API_KEY is not set` warning is misleading — it's printed by the AI module before env loading completes, but the calls still succeed because the env var is present.
+`AI_GATEWAY_API_KEY` lives in `.env.prod` too. If `[ai] AI_GATEWAY_API_KEY is not set` appears, that process does not have the key; load `.env.prod` as above or copy the key into `.env.local` for local-only scripts.
 
 ## The four tiers
 
@@ -114,7 +117,7 @@ The Claude Code auto-mode classifier blocks `git push origin main` by default; t
 
 - `DECISIONS.md` — every architectural trade-off with the reasoning. Read before making structurally significant changes.
 - `VERIFICATION.md` — acceptance criteria + how each is verified.
-- `OPEN_QUESTIONS.md` — unresolved design questions.
+- `OPEN_QUESTIONS.md` — editorial questions plus resolved-question breadcrumbs.
 - `README.md` — public-facing project intro + script index.
 - `/about` page — public-facing colophon.
 

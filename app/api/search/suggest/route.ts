@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
 
   // Two layers, fused by tier preference:
   //  - name ILIKE prefix match (fast btree on lower(name), if no index
-  //    Postgres scans 347 rows — trivial)
+  //    Postgres scans the curated corpus — trivial at current size)
   //  - FTS on search_text for substring/phrase matches
   // We order by: prefix match first (tighter signal), then ts_rank,
   // then tier desc (curated entries surface higher).

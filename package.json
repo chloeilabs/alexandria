@@ -20,7 +20,7 @@
     "pipeline": "tsx pipeline/index.ts",
     "pipeline:wikidata": "tsx pipeline/bulk/import-wikidata-dump.ts",
     "pipeline:wikipedia": "tsx pipeline/bulk/import-wikipedia-dump.ts",
-    "pipeline:tags": "tsx pipeline/bulk/assign-civilization-tags.ts",
+    "pipeline:tags": "tsx scripts/tag-all.ts",
     "pipeline:audit": "tsx pipeline/audit/coverage-report.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
