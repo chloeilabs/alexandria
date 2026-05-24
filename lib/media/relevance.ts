@@ -155,17 +155,25 @@ export function extractYearFromDateText(text: string): number | null {
 }
 
 /**
- * Returns true when the candidate's date falls within a generous window
- * around the entity's lifespan. For an entity with start=−247, end=−183
- * (Hannibal Barca), an 1850s Hannibal Hamlin candidate fails. For an
- * entity without dates, or a candidate without parseable dates, the
- * check is skipped (returns true — can't filter without signal).
+ * Returns true when the candidate's date falls within a plausible window
+ * around the entity's lifespan. Two stacked checks:
  *
- * Buffer defaults to 200 years on either side. Asymmetric historical
- * coverage (later art depicting earlier figures is common — 19th c.
- * portraits of Hannibal Barca exist) means we keep the late-side buffer
- * wide; the use case is rejecting unambiguously wrong-period matches
- * like 1850s American politicians, not period art.
+ * 1. **Relative buffer** — candidate must sit within `bufferYears` before
+ *    the entity's start and `lateBufferYears` after its end. Default
+ *    late buffer is wide (2500 years) because period art of ancient
+ *    figures shows up centuries later.
+ *
+ * 2. **Era-aware absolute late cap** — for entities that died long
+ *    enough ago, post-1700 (BCE) or post-1900 (medieval) candidates
+ *    are overwhelmingly same-name modern figures (Hannibal Barca vs.
+ *    "Johannes Hannibal" 1930; Saladin the sultan vs. early-20th c.
+ *    namesakes). We cap absolutely on top of the relative window:
+ *      - entity ended BCE                 → cap candidate year at 1700
+ *      - entity ended 0–1500 CE (medieval)→ cap candidate year at 1900
+ *      - entity ended ≥ 1500 CE           → no cap
+ *
+ * Returns true when the entity has no dates, or when the candidate
+ * has no parseable date — neither side gives a signal to filter on.
  */
 export function dateWindowAccepts(
   entityStart: number | null | undefined,
@@ -180,9 +188,17 @@ export function dateWindowAccepts(
   const start = entityStart ?? entityEnd ?? 0;
   const end = entityEnd ?? entityStart ?? 0;
   const earlyBuffer = options.bufferYears ?? 200;
-  // Allow later depictions liberally — period art of ancient figures
-  // shows up centuries / millennia after the fact.
   const lateBuffer = options.lateBufferYears ?? 2500;
+
+  // Era-aware absolute cap on the candidate year. Applied IN ADDITION
+  // to the relative window — both must accept the candidate.
+  let absoluteLateCap: number | null = null;
+  if (end < 0) absoluteLateCap = 1700;
+  else if (end < 1500) absoluteLateCap = 1900;
+  if (absoluteLateCap !== null && candidateYear > absoluteLateCap) {
+    return false;
+  }
+
   return (
     candidateYear >= start - earlyBuffer &&
     candidateYear <= end + lateBuffer
