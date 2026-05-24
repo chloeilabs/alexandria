@@ -61,23 +61,28 @@ async function sleep(ms: number) {
 async function main(): Promise<void> {
   const args = parseArgs();
 
-  // DISTINCT ON (entity_qid) ordered by created_at DESC gives the most
-  // recent flagged review per entity — matches what the entity page reads.
+  // Get THE latest review per entity (any status), then filter to
+  // flagged. The entity page reads the single most-recent review
+  // regardless of status (lib/db/queries/entity.ts orders by
+  // created_at DESC with no status filter), so filtering inside
+  // DISTINCT ON would happily enrich an older flagged row that's
+  // been superseded by a newer clean review and never displayed.
+  // CodeRabbit P2 catch on PR #14.
   const rows = await db.execute<{
     id: number;
     entity_qid: string;
     entity_name: string;
     flagged_claims: Finding[] | null;
   }>(sql`
-    SELECT DISTINCT ON (r.entity_qid)
-      r.id,
-      r.entity_qid,
-      e.name AS entity_name,
-      r.flagged_claims
-    FROM fact_check_reviews r
-    JOIN entities e ON e.qid = r.entity_qid
-    WHERE r.status = 'flagged'
-    ORDER BY r.entity_qid, r.created_at DESC
+    WITH latest AS (
+      SELECT DISTINCT ON (entity_qid) id, entity_qid, status, flagged_claims
+      FROM fact_check_reviews
+      ORDER BY entity_qid, created_at DESC
+    )
+    SELECT l.id, l.entity_qid, e.name AS entity_name, l.flagged_claims
+    FROM latest l
+    JOIN entities e ON e.qid = l.entity_qid
+    WHERE l.status = 'flagged'
     ${args.limit ? sql`LIMIT ${args.limit}` : sql``}
   `);
   const reviews = Array.from(rows);
