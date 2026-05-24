@@ -10,6 +10,7 @@ import {
 } from "@/lib/search";
 import { getFeaturedEntities } from "@/lib/db/queries/entity";
 import { fmtYear, regionLabel } from "@/lib/format";
+import { SearchAutocomplete } from "@/components/search/SearchAutocomplete";
 
 interface PageProps {
   searchParams: Promise<{
@@ -66,19 +67,7 @@ export default async function SearchPage({ searchParams }: PageProps) {
         <label htmlFor="q" className="sr-only">
           Search
         </label>
-        <input
-          id="q"
-          name="q"
-          type="search"
-          defaultValue={query}
-          placeholder="Search the Library…"
-          autoFocus
-          autoComplete="off"
-          spellCheck="false"
-          inputMode="search"
-          enterKeyHint="search"
-          className="w-full bg-transparent border-b border-border px-0 py-4 text-3xl md:text-4xl font-display font-light focus:outline-none focus:border-accent text-foreground placeholder:text-muted-foreground/60 transition-colors"
-        />
+        <SearchAutocomplete initialQuery={query} />
         {/* Preserve filter state when the user types */}
         {filters.type && (
           <input type="hidden" name="type" value={filters.type} />
