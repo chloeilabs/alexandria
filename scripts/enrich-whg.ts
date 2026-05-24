@@ -73,9 +73,13 @@ function pickBest(name: string, candidates: WhgPlace[]): WhgPlace | null {
 async function main(): Promise<void> {
   const args = parseArgs();
 
+  // Apply the same type='place' guard to --qid lookups so accidentally
+  // pointing the script at a person/event QID doesn't pollute their
+  // entity_aliases with place-name variants (CodeRabbit P2 catch).
   const rows = args.qid
     ? await db.execute<{ qid: string; name: string; type: string }>(sql`
-        SELECT qid, name, type FROM entities WHERE qid = ${args.qid}
+        SELECT qid, name, type FROM entities
+        WHERE qid = ${args.qid} AND type = 'place'
       `)
     : await db.execute<{ qid: string; name: string; type: string }>(sql`
         SELECT qid, name, type FROM entities
@@ -84,6 +88,14 @@ async function main(): Promise<void> {
         ${args.limit ? sql`LIMIT ${args.limit}` : sql``}
       `);
   const list = Array.from(rows);
+
+  if (args.qid && list.length === 0) {
+    console.log(
+      `Entity ${args.qid} not found, or is not a place — skipping (use a place entity).`,
+    );
+    await db.$client.end();
+    return;
+  }
 
   console.log(
     `Enriching ${list.length} place entities with WHG variants…\n`,
