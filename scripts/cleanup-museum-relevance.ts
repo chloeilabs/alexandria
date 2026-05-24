@@ -17,7 +17,7 @@ import "../lib/env";
 import { sql, eq, inArray } from "drizzle-orm";
 
 import { db } from "../lib/db";
-import { entities, media } from "../lib/db/schema";
+import { media } from "../lib/db/schema";
 import { nameMatchesHaystack } from "../lib/media/relevance";
 
 async function main(): Promise<void> {
