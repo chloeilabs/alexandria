@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter, Cormorant_Garamond, JetBrains_Mono } from "next/font/google";
 import { SiteNav } from "@/components/nav/SiteNav";
 import { SiteFooter } from "@/components/nav/SiteFooter";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const inter = Inter({
@@ -68,6 +70,15 @@ export default function RootLayout({
         <SiteNav />
         <div className="flex-1">{children}</div>
         <SiteFooter />
+        {/* Vercel Speed Insights = real Core Web Vitals (LCP / INP /
+            CLS / FCP / TTFB) measured from actual visitors. Free on
+            Hobby. Self-disables in dev. Sends one beacon at page-hide
+            time; no perf impact on the page itself. */}
+        <SpeedInsights />
+        {/* Vercel Analytics = privacy-friendly page-view tracking.
+            No cookies, no third-party tracker. Free 25K events/mo on
+            Hobby. Same beacon model — single request at unload. */}
+        <Analytics />
       </body>
     </html>
   );
