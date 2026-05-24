@@ -204,3 +204,99 @@ export function dateWindowAccepts(
     candidateYear <= end + lateBuffer
   );
 }
+
+// ---------------------------------------------------------------------------
+// Country-heritage filter for ancient entities
+// ---------------------------------------------------------------------------
+//
+// `dateWindowAccepts` only filters when the candidate has a parseable
+// year. For BCE entities, the residual false positives are no-year
+// items where the entity name happens to collide with a modern person /
+// object / place in a country with no classical-antiquity holdings —
+// "V. Hannibal" Bauhaus drawings (Germany; passes since Germany IS a
+// heritage country — known leak), "Hannibal af Aarøsund" (Denmark,
+// modern lighthouse), "Johannes Hannibal" + "Hannibal Sehested" (a
+// 17th-century Danish politician).
+//
+// Heuristic: for BCE entities, candidates without parseable dates must
+// come from a country with documented classical-antiquity museum
+// holdings. Anything from modern Nordic, Baltic, or non-Mediterranean
+// countries is overwhelmingly a same-name modern figure.
+//
+// Coarse and brittle by design — the curated list is hand-maintained
+// and biased toward "what countries plausibly hold Carthaginian /
+// Egyptian / Mesopotamian / Greek / Roman material." Add to it
+// deliberately when a real miss surfaces. Europeana's `country` field
+// returns full English country names (verified against a Hannibal
+// query: "Italy", "Germany", "Estonia", "Denmark", "Austria").
+
+const MEDITERRANEAN_HERITAGE_COUNTRIES = new Set<string>([
+  // Countries with deep classical-era heritage holdings.
+  // Origin cultures of the BCE Mediterranean / Near East / Egypt:
+  "Egypt",
+  "Greece",
+  "Italy",
+  "Turkey",
+  "Syria",
+  "Lebanon",
+  "Israel",
+  "Jordan",
+  "Iran",
+  "Iraq",
+  "Cyprus",
+  "Libya",
+  "Tunisia",
+  "Algeria",
+  "Morocco",
+  "Sudan",
+  // Major European museum holders of classical material:
+  "Austria",
+  "Belgium",
+  "France",
+  "Germany",
+  "Netherlands",
+  "Portugal",
+  "Spain",
+  "Switzerland",
+  "United Kingdom",
+  "Vatican",
+  "Vatican City",
+  "Croatia",
+  "Slovenia",
+  "Malta",
+  // Major non-European museum holders:
+  "United States",
+  "Canada",
+]);
+
+/**
+ * Additional gate for BCE entities — applied on top of name-match and
+ * `dateWindowAccepts`. For ancient figures, candidates split into:
+ *
+ *  - Pre-1500 (Renaissance and earlier): legitimate period art of
+ *    ancients shows up across all heritage countries — accept anywhere.
+ *  - Post-1500 OR no year: increasingly likely to be a same-name
+ *    modern figure ("Hannibal Sehested" 1650 Danish politician;
+ *    "Hannibal af Aarøsund" Danish lighthouse). Require the country
+ *    to be in the Mediterranean heritage set.
+ *
+ * Returns true when:
+ *  - entity is not BCE, OR
+ *  - candidate has a parseable pre-1500 year, OR
+ *  - candidate country is in the Mediterranean heritage set.
+ *
+ * Returns false otherwise.
+ */
+export function bceCountryHeritageAccepts(
+  entityEnd: number | null | undefined,
+  candidateDateText: string | null | undefined,
+  candidateCountry: string | null | undefined,
+): boolean {
+  if (entityEnd == null || entityEnd >= 0) return true;
+  const candidateYear = candidateDateText
+    ? extractYearFromDateText(candidateDateText)
+    : null;
+  if (candidateYear != null && candidateYear < 1500) return true;
+  if (!candidateCountry) return false;
+  return MEDITERRANEAN_HERITAGE_COUNTRIES.has(candidateCountry.trim());
+}
