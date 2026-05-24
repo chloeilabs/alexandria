@@ -4,6 +4,7 @@
 
 import { ImageResponse } from "next/og";
 import { getEntityBySlug } from "@/lib/db/queries/entity";
+import { APP_DESCRIPTION } from "@/lib/site";
 import {
   fmtDateRange,
   regionLabel,
@@ -145,7 +146,7 @@ export default async function Image({ params }: Props) {
             zIndex: 1,
           }}
         >
-          A digital encyclopedia of human civilization
+          {APP_DESCRIPTION}
         </div>
       </div>
     ),

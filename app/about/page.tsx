@@ -3,11 +3,11 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { APP_DESCRIPTION } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "About · Alexandria",
-  description:
-    "A living digital encyclopedia of human civilization — comprehensive across all eras and regions, with curated long-form prose at the top tier.",
+  description: APP_DESCRIPTION,
 };
 
 export default function AboutPage() {
@@ -23,10 +23,9 @@ export default function AboutPage() {
           encyclopedia
         </h1>
         <p className="mt-8 font-display italic text-2xl text-muted-foreground leading-snug border-l-2 border-accent/40 pl-5 max-w-2xl">
-          Alexandria is a living encyclopedia of human civilization. It is not
-          a timeline website. It is an interconnected web of stories that
-          someone can follow from the fall of Rome to Mongol siege warfare to
-          Byzantine plumbing.
+          {APP_DESCRIPTION} It is not a timeline website. It is an
+          interconnected web of stories that someone can follow from the fall
+          of Rome to Mongol siege warfare to Byzantine plumbing.
         </p>
       </header>
 

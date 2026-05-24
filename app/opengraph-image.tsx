@@ -3,6 +3,7 @@
 // brand and the tagline.
 
 import { ImageResponse } from "next/og";
+import { APP_DESCRIPTION } from "@/lib/site";
 
 export const alt = "Alexandria";
 export const size = { width: 1200, height: 630 };
@@ -49,21 +50,20 @@ export default async function Image() {
               color: "#d6b066",
             }}
           >
-            A digital encyclopedia
+            Alexandria
           </div>
           <div
             style={{
               display: "flex",
-              fontSize: 160,
+              fontSize: 88,
               fontWeight: 300,
-              lineHeight: 0.92,
+              lineHeight: 1.02,
               color: "#f6f5f0",
-              letterSpacing: -4,
+              letterSpacing: -2,
+              maxWidth: 920,
             }}
           >
-            of human
-            <br />
-            civilization
+            {APP_DESCRIPTION}
           </div>
         </div>
 

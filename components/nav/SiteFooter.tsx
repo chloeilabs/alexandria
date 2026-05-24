@@ -4,6 +4,7 @@
 // content broadly comes from, what licence covers it, who built the site.
 
 import Link from "next/link";
+import { APP_DESCRIPTION } from "@/lib/site";
 
 const YEAR_BUILT = "2026";
 
@@ -20,8 +21,7 @@ export function SiteFooter() {
             Alexandria
           </Link>
           <p className="font-display italic text-base text-muted-foreground max-w-xs leading-snug">
-            A digital encyclopedia of human civilization. Begin anywhere;
-            follow the threads.
+            {APP_DESCRIPTION} Begin anywhere; follow the threads.
           </p>
         </div>
 
