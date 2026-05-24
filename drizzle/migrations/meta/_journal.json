@@ -19,7 +19,7 @@
     {
       "idx": 2,
       "version": "7",
-      "when": 1779999999999,
+      "when": 1779498420495,
       "tag": "0002_embedding_hnsw_index",
       "breakpoints": true
     },
@@ -42,6 +42,20 @@
       "version": "7",
       "when": 1779579873991,
       "tag": "0005_cynical_luckman",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779635085795,
+      "tag": "0006_little_la_nuit",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779635756496,
+      "tag": "0007_cynical_katie_power",
       "breakpoints": true
     }
   ]

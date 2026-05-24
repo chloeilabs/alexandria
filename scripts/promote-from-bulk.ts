@@ -22,10 +22,17 @@
  *
  * Usage:
  *   pnpm tsx scripts/promote-from-bulk.ts
+ *   pnpm tsx scripts/promote-from-bulk.ts --from-priority-queue=20
+ *
+ * The `--from-priority-queue=N` flag replaces PROMOTE_QIDS with the top
+ * N qids from `enrichment_priority` on Neon (target_tier=1, ordered by
+ * deficit_score DESC then rank_in_bucket). The QIDs are looked up in the
+ * local bulk DB; ones not present in bulk are skipped. Useful once the
+ * priority table has been populated by `coverage-report --write-priority`.
  */
 import "../lib/env";
 import postgres from "postgres";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { db } from "../lib/db";
 import {
@@ -59,8 +66,38 @@ const PROMOTE_QIDS = [
 const LOCAL_DB_URL =
   "postgresql://library:changeme@localhost:5434/library";
 
+function parseFromPriorityQueue(argv: readonly string[]): number | null {
+  for (const a of argv) {
+    if (a.startsWith("--from-priority-queue=")) {
+      const n = parseInt(a.slice("--from-priority-queue=".length), 10);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+  }
+  return null;
+}
+
+async function resolveCandidateQids(): Promise<string[]> {
+  const fromPriority = parseFromPriorityQueue(process.argv.slice(2));
+  if (fromPriority == null) return [...PROMOTE_QIDS];
+
+  const rows = await db.execute<{ qid: string }>(sql`
+    SELECT qid FROM enrichment_priority
+    WHERE target_tier = 1
+    ORDER BY deficit_score DESC, rank_in_bucket
+    LIMIT ${fromPriority}
+  `);
+  const qids = Array.from(rows).map((r) => r.qid);
+  console.log(
+    `(--from-priority-queue=${fromPriority}: ${qids.length} qids from enrichment_priority)`,
+  );
+  return qids;
+}
+
 async function main(): Promise<void> {
-  console.log(`Promoting ${PROMOTE_QIDS.length} entities from bulk to Neon…\n`);
+  const candidateQids = await resolveCandidateQids();
+  console.log(
+    `Promoting ${candidateQids.length} entities from bulk to Neon…\n`,
+  );
 
   // 1. Read everything we need from local Postgres in one shot.
   interface EntityRow {
@@ -82,7 +119,7 @@ async function main(): Promise<void> {
            date_end, date_end_precision,
            latitude, longitude
     FROM entities
-    WHERE qid = ANY(${PROMOTE_QIDS}::text[])
+    WHERE qid = ANY(${candidateQids}::text[])
   `) as unknown as EntityRow[];
 
   if (localEntities.length === 0) {
@@ -93,7 +130,7 @@ async function main(): Promise<void> {
   }
 
   const foundQids = localEntities.map((e) => e.qid);
-  const missingFromLocal = PROMOTE_QIDS.filter(
+  const missingFromLocal = candidateQids.filter(
     (q) => !foundQids.includes(q),
   );
   if (missingFromLocal.length > 0) {

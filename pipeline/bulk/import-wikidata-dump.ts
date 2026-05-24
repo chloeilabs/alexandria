@@ -35,8 +35,10 @@ import {
   getAliases,
   getCoordinates,
   getDates,
+  getEnwikiTitle,
   getName,
   getRelationships,
+  getSitelinkCount,
   makeSlug,
   passesSeedFilter,
 } from "./wikidata";
@@ -294,6 +296,8 @@ async function main(): Promise<void> {
             dateEndPrecision: dates.dateEndPrecision,
             latitude: coords?.latitude ?? null,
             longitude: coords?.longitude ?? null,
+            enwikiTitle: getEnwikiTitle(entity.sitelinks),
+            sitelinkCount: getSitelinkCount(entity.sitelinks),
           });
 
           for (const a of aliases) {

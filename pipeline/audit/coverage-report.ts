@@ -24,6 +24,7 @@ import "../../lib/env";
 import { sql } from "drizzle-orm";
 
 import { db } from "../../lib/db";
+import { enrichmentPriority } from "../../lib/db/schema";
 
 interface EraCount {
   era: string;
@@ -250,13 +251,107 @@ function fmtConsole(report: Report): string {
   return lines.join("\n");
 }
 
+/**
+ * Persist a per-(civ × entity) priority list to `enrichment_priority`.
+ * Consumed by Phase 2/3 enqueue scripts (queue-tier1-batch.ts, queue-
+ * tier2-priority.ts) which apply per-civ quotas on top.
+ *
+ * For each civ-bucket:
+ *   deficit_score = max(0, median_civ_count - this_civ_count)
+ *   rank_in_bucket = position by inbound_link_count desc within the civ
+ *
+ * Target tier is derived from the entity's current tier:
+ *   tier=0 → target 1 (needs Wikipedia-lead summary)
+ *   tier=1 → target 2 (needs multi-source narrative)
+ *   tier≥2 → skipped (already at the deep tier)
+ */
+async function writePriorityQueue(): Promise<{
+  rowsWritten: number;
+  civsTouched: number;
+}> {
+  // Per-civ count + median for deficit_score.
+  const civCounts = await db.execute<{ civ: string; n: number }>(sql`
+    SELECT er.region_value AS civ, COUNT(DISTINCT e.qid)::int AS n
+    FROM entity_regions er
+    JOIN entities e ON e.qid = er.entity_qid
+    WHERE er.region_kind = 'civilizational'
+    GROUP BY er.region_value
+  `);
+  const counts = Array.from(civCounts).map((r) => r.n).sort((a, b) => a - b);
+  const median = counts[Math.floor(counts.length / 2)] ?? 0;
+  const deficitByCiv = new Map<string, number>();
+  for (const r of civCounts) {
+    deficitByCiv.set(r.civ, Math.max(0, median - r.n));
+  }
+
+  // Per-(civ, entity) ranked list. Within each civ, order by inbound
+  // link count desc; ties broken by name for determinism. Filter to
+  // tier 0 and 1 (the candidates for enrichment).
+  const ranked = await db.execute<{
+    civ: string;
+    qid: string;
+    tier: number;
+    rank_in_bucket: number;
+  }>(sql`
+    SELECT
+      civ,
+      qid,
+      tier,
+      rank_in_bucket
+    FROM (
+      SELECT
+        er.region_value AS civ,
+        e.qid,
+        e.tier,
+        ROW_NUMBER() OVER (
+          PARTITION BY er.region_value
+          ORDER BY e.inbound_link_count DESC, e.name ASC
+        ) - 1 AS rank_in_bucket
+      FROM entity_regions er
+      JOIN entities e ON e.qid = er.entity_qid
+      WHERE er.region_kind = 'civilizational'
+        AND e.tier < 2
+    ) ranked
+  `);
+
+  // Replace the whole table (this is a recomputation, not an append).
+  await db.execute(sql`TRUNCATE TABLE enrichment_priority`);
+
+  const rows = Array.from(ranked).map((r) => ({
+    civilizationalTag: r.civ,
+    qid: r.qid,
+    deficitScore: deficitByCiv.get(r.civ) ?? 0,
+    rankInBucket: r.rank_in_bucket,
+    targetTier: (r.tier === 0 ? 1 : 2) as 1 | 2,
+  }));
+
+  if (rows.length === 0) {
+    return { rowsWritten: 0, civsTouched: deficitByCiv.size };
+  }
+
+  // Batch insert (chunks of 1000 to stay under parameter limits).
+  const CHUNK = 1000;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    await db.insert(enrichmentPriority).values(rows.slice(i, i + CHUNK));
+  }
+
+  return { rowsWritten: rows.length, civsTouched: deficitByCiv.size };
+}
+
 async function main(): Promise<void> {
   const json = process.argv.includes("--json");
+  const write = process.argv.includes("--write-priority");
   const report = await gather();
   if (json) {
     console.log(JSON.stringify(report, null, 2));
   } else {
     console.log(fmtConsole(report));
+  }
+  if (write) {
+    const r = await writePriorityQueue();
+    console.log(
+      `\nenrichment_priority: wrote ${r.rowsWritten} rows across ${r.civsTouched} civilizational tags`,
+    );
   }
   await db.$client.end();
 }

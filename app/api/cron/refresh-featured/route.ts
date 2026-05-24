@@ -15,6 +15,7 @@ import { desc, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { featuredCache } from "@/lib/db/schema";
 import { computeFeaturedEntities } from "@/lib/db/queries/entity";
+import { runCoverageDiff } from "@/pipeline/audit/coverage-diff";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,6 +34,19 @@ export async function GET(req: NextRequest) {
   const t0 = Date.now();
   const featured = await computeFeaturedEntities(12, 2);
 
+  // Run the bias-regression diff alongside the featured refresh. The
+  // result is attached to the new featured_cache row's meta — /api/health
+  // reads it back to surface flagged civs without a separate cron slot
+  // (Vercel Hobby allows only 1 cron/day).
+  let bias: Awaited<ReturnType<typeof runCoverageDiff>> | null = null;
+  try {
+    bias = await runCoverageDiff();
+  } catch (err) {
+    // Diff failure must not block the featured refresh — log and
+    // continue with bias = null.
+    console.warn("[cron] coverage-diff failed:", err);
+  }
+
   // Insert the new row, then trim to the last 2 (one for live reads,
   // one to fall back on if the next cron run fails). Both ops in a
   // transaction so readers never see an empty cache mid-refresh.
@@ -43,6 +57,12 @@ export async function GET(req: NextRequest) {
         count: featured.length,
         generatedInMs: Date.now() - t0,
         generatedAt: new Date().toISOString(),
+        bias: bias
+          ? {
+              snapshot: bias.snapshot,
+              flagged: bias.flagged,
+            }
+          : null,
       },
     });
     await tx.execute(sql`
@@ -68,5 +88,6 @@ export async function GET(req: NextRequest) {
     cacheAt: latest?.createdAt,
     count: featured.length,
     generatedInMs: Date.now() - t0,
+    bias_flagged_count: bias?.flagged.length ?? null,
   });
 }

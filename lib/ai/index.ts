@@ -16,24 +16,51 @@ if (!process.env.AI_GATEWAY_API_KEY && process.env.NODE_ENV !== "test") {
   );
 }
 
-// Default model for all tiers. The user opted into Gemini 3.5 Flash:
-// $1.50/M input, $9/M output, 1M-token context window — meaningfully
-// cheaper than Sonnet for our volume. Swap by changing this constant.
+// Default model for Tier 1 summaries and single-source Tier 2 narratives.
+// $1.50/M input, $9/M output, 1M-token context window.
 export const MODEL_FLASH = "google/gemini-3.5-flash";
 
-// Reserved for the curated tier if/when we want a stronger model.
-// Current default Flash is fine for Tier 1+2; this is here so the
-// budget tracker can distinguish if we later use multiple models.
-export const MODEL_PRO = "google/gemini-3.5-flash"; // intentionally same for now
+// MODEL_PRO collapsed to MODEL_FLASH (2026-05-24 bake-off v2 verdict).
+// Qwen3.7-max scored +2 on the AAI intelligence index but produced
+// reasoning tokens that pushed billed output 1.34× over Flash even with
+// `reasoning: { effort: 'none' }` set (Vercel AI Gateway's per-provider
+// reasoning suppression doesn't cover Qwen as of 2026-03-07 docs). Flash
+// wins on $/quality; one model everywhere is also simpler. Exported as
+// a separate constant for downstream call-site compat — flip the value
+// here to re-enable tiering if a future model swap argues for it.
+export const MODEL_PRO = MODEL_FLASH;
+
+// Fallback chain via AI Gateway's `providerOptions.gateway.models`. If
+// the primary upstream is throttled or fails, the gateway tries the
+// next in order. Keeps the encyclopedia generating even during single-
+// provider outages.
+export const NARRATE_MODELS: string[] = [MODEL_FLASH];
 
 export type Model = typeof MODEL_FLASH | typeof MODEL_PRO;
 
 /**
- * USD per million tokens, fetched 2026-05-22 from AI Gateway model listing.
+ * USD per million tokens. Refresh via the gateway's models endpoint:
+ *   curl -H "Authorization: Bearer $AI_GATEWAY_API_KEY" \
+ *     https://ai-gateway.vercel.sh/v1/models
  */
 export const PRICING: Record<string, { input: number; output: number }> = {
   [MODEL_FLASH]: { input: 1.5, output: 9.0 },
 };
+
+/**
+ * Pick a model for a tier. Tier 3 hand-curation and multi-source Tier 2
+ * narrates route to Pro; everything else stays on Flash. Used by the
+ * narrate worker and Tier 3 scripts; budget gate handles the cost
+ * difference automatically since PRICING is per-model.
+ */
+export function chooseModel(
+  tier: 1 | 2 | 3,
+  hasMultiSource: boolean,
+): typeof MODEL_FLASH | typeof MODEL_PRO {
+  if (tier === 3) return MODEL_PRO;
+  if (tier === 2 && hasMultiSource) return MODEL_PRO;
+  return MODEL_FLASH;
+}
 
 // ---------------------------------------------------------------------------
 // Embeddings

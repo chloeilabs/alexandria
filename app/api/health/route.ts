@@ -41,12 +41,23 @@ interface HealthCheck {
     most_recent_at: string | null;
     age_hours: number | null;
   };
+  budget: {
+    monthly_spend_usd: number;
+    monthly_cap_usd: number;
+    pct_used: number;
+  };
+  bias: {
+    last_diff_at: string | null;
+    flagged_civs: string[];
+  };
   build: {
     commit_sha: string;
     env: string;
     region: string | null;
   };
 }
+
+const MONTHLY_CAP_USD = Number(process.env.MONTHLY_BUDGET_USD ?? 600);
 
 export async function GET() {
   const startedAt = Date.now();
@@ -67,10 +78,17 @@ export async function GET() {
       most_recent_review: Date | null;
       total_reviews: number;
       cache_at: Date | null;
+      cache_meta: {
+        bias?: {
+          snapshot?: { generated_at?: string };
+          flagged?: Array<{ civ: string }>;
+        };
+      } | null;
+      monthly_spend: string;
     };
     const result = await withRetry("health", async () => {
       const dbStart = Date.now();
-      // Two queries in one round trip via a CTE.
+      // All queries in one round trip via a single CTE.
       const rows = await db.execute<HealthRow>(sql`
         WITH counts AS (
           SELECT
@@ -91,7 +109,16 @@ export async function GET() {
           FROM fact_check_reviews
         ),
         cache AS (
-          SELECT MAX(created_at) AS cache_at FROM featured_cache
+          SELECT created_at AS cache_at, meta AS cache_meta
+          FROM featured_cache
+          ORDER BY created_at DESC
+          LIMIT 1
+        ),
+        spend AS (
+          SELECT COALESCE(SUM(api_cost_usd), 0)::text AS monthly_spend
+          FROM pipeline_runs
+          WHERE date_trunc('month', started_at) = date_trunc('month', NOW())
+            AND status IN ('completed', 'running')
         )
         SELECT
           c.total,
@@ -100,8 +127,12 @@ export async function GET() {
           ) AS tier_breakdown,
           r.most_recent_review,
           r.total_reviews,
-          ca.cache_at
-        FROM counts c, reviews r, cache ca
+          ca.cache_at,
+          ca.cache_meta,
+          s.monthly_spend
+        FROM counts c, reviews r
+        LEFT JOIN cache ca ON true
+        CROSS JOIN spend s
       `);
       const dbRoundtripMs = Date.now() - dbStart;
       const row = Array.from(rows)[0];
@@ -115,13 +146,26 @@ export async function GET() {
       ? (Date.now() - cacheAt.getTime()) / (1000 * 60 * 60)
       : null;
 
+    const monthlySpend = Number(row.monthly_spend ?? "0");
+    const pctUsed =
+      MONTHLY_CAP_USD > 0
+        ? Number(((monthlySpend / MONTHLY_CAP_USD) * 100).toFixed(2))
+        : 0;
+
+    const flaggedCivs =
+      row.cache_meta?.bias?.flagged?.map((f) => f.civ) ?? [];
+    const lastDiffAt = row.cache_meta?.bias?.snapshot?.generated_at ?? null;
+
     // Degraded if: featured cache is stale (>36h, the cron should have
     // refreshed it nightly), DB roundtrip is slow (>2s, indicates Neon
-    // cold-start hang), or no fact-check reviews exist at all.
+    // cold-start hang), no fact-check reviews exist at all, monthly cap
+    // is > 95% used, or bias-diff flagged a >5pp drop on any civ.
     const degraded =
       result.dbRoundtripMs > 2000 ||
       (cacheAgeHours != null && cacheAgeHours > 36) ||
-      row.total_reviews === 0;
+      row.total_reviews === 0 ||
+      pctUsed > 95 ||
+      flaggedCivs.length > 0;
 
     const status: HealthCheck["status"] = degraded ? "degraded" : "ok";
 
@@ -143,6 +187,15 @@ export async function GET() {
       featured_cache: {
         most_recent_at: cacheAt?.toISOString() ?? null,
         age_hours: cacheAgeHours == null ? null : Number(cacheAgeHours.toFixed(2)),
+      },
+      budget: {
+        monthly_spend_usd: Number(monthlySpend.toFixed(4)),
+        monthly_cap_usd: MONTHLY_CAP_USD,
+        pct_used: pctUsed,
+      },
+      bias: {
+        last_diff_at: lastDiffAt,
+        flagged_civs: flaggedCivs,
       },
       build: buildInfo,
     };

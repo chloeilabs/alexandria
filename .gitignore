@@ -45,3 +45,6 @@ dumps/
 # Local-only IDE settings
 .claude/
 .vercel
+
+# Calibration / bake-off output (regenerable from scripts)
+calibration-*.md

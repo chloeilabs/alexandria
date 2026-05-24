@@ -667,6 +667,34 @@ export function passesSeedFilter(entity: WdEntity): EntityType | null {
 }
 
 /**
+ * Get the English Wikipedia article title for this entity, if it has one.
+ * Captured into entities.enwiki_title for 1:1 Wikipedia matching during
+ * later enrichment (DECISIONS.md 2026-05-24 — unique-name matching loses
+ * ~3.8% recall to label collisions).
+ */
+export function getEnwikiTitle(
+  sitelinks: Record<string, WdSitelink> | undefined,
+): string | null {
+  return sitelinks?.enwiki?.title ?? null;
+}
+
+/**
+ * Count language-Wikipedia sitelinks (excludes Commons, Wikidata, etc).
+ * Coarse notability proxy alongside inbound_link_count for prioritization.
+ */
+export function getSitelinkCount(
+  sitelinks: Record<string, WdSitelink> | undefined,
+): number {
+  if (!sitelinks) return 0;
+  let n = 0;
+  for (const key of Object.keys(sitelinks)) {
+    if (NON_LANGUAGE_WIKI_KEYS.has(key)) continue;
+    if (SITELINK_PATTERN.test(key)) n += 1;
+  }
+  return n;
+}
+
+/**
  * Get the P17 (country) target QID, used later for UN subregion derivation.
  */
 export function getCountryQid(

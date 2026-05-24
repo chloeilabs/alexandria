@@ -78,6 +78,13 @@ export const entities = pgTable(
     // Priority signals for the pg-boss upgrade queue
     inboundLinkCount: integer("inbound_link_count").notNull().default(0),
 
+    // Captured from the Wikidata dump for clean Wikipedia title matching
+    // (DECISIONS.md 2026-05-24: unique-name matching loses ~3.8% to label
+    // collisions; sitelinks.enwiki.title gives a 1:1 join). Total sitelink
+    // count is a coarse notability signal usable alongside inbound_link_count.
+    enwikiTitle: text("enwiki_title"),
+    sitelinkCount: integer("sitelink_count").notNull().default(0),
+
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -199,7 +206,10 @@ export const media = pgTable(
   },
   (t) => [
     index("media_entity_idx").on(t.entityQid),
-    uniqueIndex("media_commons_url_unique").on(t.commonsUrl),
+    // Composite unique: allow the same Commons file on multiple entities
+    // (DECISIONS.md 2026-05-24 — shared hero imagery was silently dropped
+    // on the second insert). Still prevents duplicate (entity, url) pairs.
+    uniqueIndex("media_entity_commons_unique").on(t.entityQid, t.commonsUrl),
   ],
 );
 
@@ -391,6 +401,47 @@ export const featuredCache = pgTable("featured_cache", {
 });
 
 // ---------------------------------------------------------------------------
+// Enrichment priority — audit-driven Tier 1/2 work queue.
+// ---------------------------------------------------------------------------
+//
+// Written by pipeline/audit/coverage-report.ts. Read by the Phase 2/3
+// queue-build scripts (queue-tier1-batch.ts, queue-tier2-priority.ts).
+// One row per (civilizational_tag × entity × target_tier). deficit_score
+// reflects how thin the civ is vs the median (max(0, median - civ_n));
+// rank_in_bucket orders entities within a civ-bucket by inbound-link
+// centrality. The queue-build scripts apply per-civ quotas on top.
+
+export const enrichmentPriority = pgTable(
+  "enrichment_priority",
+  {
+    id: serial("id").primaryKey(),
+    civilizationalTag: varchar("civilizational_tag", { length: 64 }).notNull(),
+    qid: varchar("qid", { length: 32 })
+      .notNull()
+      .references(() => entities.qid, { onDelete: "cascade" }),
+    /** max(0, median_civ_count - this_civ_count); thinner civ = higher score. */
+    deficitScore: integer("deficit_score").notNull(),
+    /** 0-based rank within the civ-bucket, ordered by inbound_link_count desc. */
+    rankInBucket: integer("rank_in_bucket").notNull(),
+    /** Tier this row is targeting: 1 (summarize) or 2 (narrate). */
+    targetTier: smallint("target_tier").notNull(),
+    computedAt: timestamp("computed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("enrichment_priority_civ_idx").on(t.civilizationalTag),
+    index("enrichment_priority_target_idx").on(t.targetTier),
+    index("enrichment_priority_deficit_idx").on(t.deficitScore),
+    uniqueIndex("enrichment_priority_unique").on(
+      t.civilizationalTag,
+      t.qid,
+      t.targetTier,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Type exports for application code
 // ---------------------------------------------------------------------------
 
@@ -411,3 +462,5 @@ export type FactCheckReview = typeof factCheckReviews.$inferSelect;
 export type NewFactCheckReview = typeof factCheckReviews.$inferInsert;
 export type FeaturedCache = typeof featuredCache.$inferSelect;
 export type NewFeaturedCache = typeof featuredCache.$inferInsert;
+export type EnrichmentPriority = typeof enrichmentPriority.$inferSelect;
+export type NewEnrichmentPriority = typeof enrichmentPriority.$inferInsert;
