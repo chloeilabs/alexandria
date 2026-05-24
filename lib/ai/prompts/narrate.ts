@@ -4,9 +4,11 @@
 import { MODEL_FLASH } from "../index";
 
 export interface NarrateSource {
-  kind: "wikipedia" | "britannica_1911" | "sep" | "other";
+  kind: "wikipedia" | "britannica_1911" | "sep" | "internet_archive" | "other";
   url?: string;
   content: string;
+  /** Optional metadata used to label the source block (e.g. "Dodge, 1896"). */
+  label?: string;
 }
 
 export interface NarrateInput {
@@ -49,14 +51,17 @@ function fmtDateRange(start: number | null, end: number | null): string {
 function fmtSources(sources: NarrateSource[]): string {
   return sources
     .map((s, i) => {
-      const label =
+      const baseLabel =
         s.kind === "wikipedia"
           ? "Wikipedia (CC BY-SA)"
           : s.kind === "britannica_1911"
             ? "Encyclopædia Britannica, 1911 ed. (public domain)"
             : s.kind === "sep"
               ? "Stanford Encyclopedia of Philosophy (CC BY-NC-SA)"
-              : "Source";
+              : s.kind === "internet_archive"
+                ? "Internet Archive, pre-1924 public domain"
+                : "Source";
+      const label = s.label ? `${baseLabel} — ${s.label}` : baseLabel;
       return `<source idx="${i + 1}" kind="${s.kind}" label="${label}">\n${s.content.trim()}\n</source>`;
     })
     .join("\n\n");
