@@ -111,6 +111,10 @@ async function main(): Promise<void> {
   // calls summarizeEntity(qid). Budget gate inside summarizeEntity prevents
   // runaway spend; pg-boss retries on BudgetExceeded.
   await startQueue();
+  // Idempotent — creates pgboss schema + queue on first invocation; no-op
+  // on subsequent runs. Lets this script work standalone before
+  // run-workers.ts has registered the queues.
+  await boss.createQueue(QUEUE_SUMMARIZE);
   console.log("\nEnqueueing…");
   let enqueued = 0;
   for (const p of picked) {

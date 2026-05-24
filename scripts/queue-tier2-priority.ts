@@ -116,6 +116,8 @@ async function main(): Promise<void> {
   }
 
   await startQueue();
+  // Idempotent — creates pgboss schema + queue on first invocation.
+  await boss.createQueue(QUEUE_NARRATE);
   console.log("\nEnqueueing…");
   let enqueued = 0;
   for (const p of picked) {
