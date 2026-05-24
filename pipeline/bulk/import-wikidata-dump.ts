@@ -61,6 +61,10 @@ interface Args {
   dumpPath: string;
   limit: number | null;
   fresh: boolean;
+  /** When true, read bz2 from process.stdin instead of a file. Used to
+   *  curl-pipe the dump straight from the network without ever landing
+   *  the 100GB file on disk. */
+  stdin: boolean;
 }
 
 function parseArgs(argv: readonly string[]): Args {
@@ -68,6 +72,7 @@ function parseArgs(argv: readonly string[]): Args {
     dumpPath: DUMP_PATH_DEFAULT,
     limit: null,
     fresh: false,
+    stdin: false,
   };
   for (const a of argv) {
     if (a.startsWith("--dump-path=")) {
@@ -79,6 +84,8 @@ function parseArgs(argv: readonly string[]): Args {
       out.limit = 10_000;
     } else if (a === "--fresh") {
       out.fresh = true;
+    } else if (a === "--stdin") {
+      out.stdin = true;
     }
   }
   return out;
@@ -140,12 +147,12 @@ async function flush(batch: Batch): Promise<void> {
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
 
-  if (!fs.existsSync(args.dumpPath)) {
+  if (!args.stdin && !fs.existsSync(args.dumpPath)) {
     console.error(`Dump file not found: ${args.dumpPath}`);
     console.error(
       "Download: https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.bz2",
     );
-    console.error("Or pass --dump-path=<path>");
+    console.error("Or pass --dump-path=<path> or --stdin");
     process.exit(1);
   }
 
@@ -185,7 +192,12 @@ async function main(): Promise<void> {
   let lastQid: string | null = null;
   let batch = emptyBatch();
 
-  const fileStream = fs.createReadStream(args.dumpPath);
+  const fileStream = args.stdin
+    ? process.stdin
+    : fs.createReadStream(args.dumpPath);
+  if (args.stdin) {
+    console.log("Reading bz2 from stdin (curl-pipe mode).");
+  }
   const decompressed = fileStream.pipe(unbzip2Stream());
   const rl = readline.createInterface({
     input: decompressed,
