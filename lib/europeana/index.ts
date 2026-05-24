@@ -15,7 +15,12 @@
 // Base: https://api.europeana.eu/record/v2/search.json
 // Docs: https://pro.europeana.eu/page/search
 
-import { nameMatchesHaystack } from "../media/relevance";
+import {
+  dateWindowAccepts,
+  isNaturalScienceSource,
+  looksLikeTaxonomicSpecimen,
+  nameMatchesHaystack,
+} from "../media/relevance";
 
 const UA =
   process.env.WIKIMEDIA_USER_AGENT ??
@@ -47,6 +52,9 @@ export interface EuropeanaObject {
 export interface SearchOptions {
   /** Max items to return (default 3). */
   limit?: number;
+  /** Entity date range for the date-window filter. */
+  entityDateStart?: number | null;
+  entityDateEnd?: number | null;
 }
 
 interface SearchItem {
@@ -138,11 +146,22 @@ export async function searchItems(
   for (const item of items) {
     const n = normalize(item);
     if (!n) continue;
-    // Drop Europeana hits where the entity name doesn't actually
-    // appear in any title translation or provider — filters out
-    // botanical specimens (Musa → genus Musa) and unrelated
-    // catalog records.
+    // Layered filters — see lib/media/relevance.ts for the patterns
+    // each catches. nameMatchesHaystack handles substring relevance;
+    // looksLikeTaxonomicSpecimen catches "Prunus 'Saladin'" cultivar
+    // titles; isNaturalScienceSource catches Naturalis Biodiversity
+    // Center–style providers; dateWindowAccepts rejects e.g. 1850s
+    // candidates for ancient entities.
     if (!nameMatchesHaystack(entityName, europeanaHaystack(item, n))) {
+      continue;
+    }
+    // Walk every title translation through the taxonomy check —
+    // sometimes Europeana puts the binomial in the second or third
+    // language entry while the primary title is innocuous.
+    const allTitles = (item.title ?? []).filter(Boolean);
+    if (allTitles.some(looksLikeTaxonomicSpecimen)) continue;
+    if (isNaturalScienceSource(n.dataProvider)) continue;
+    if (!dateWindowAccepts(opts.entityDateStart, opts.entityDateEnd, n.year)) {
       continue;
     }
     normalized.push(n);

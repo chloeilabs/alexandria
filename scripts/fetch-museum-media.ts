@@ -115,11 +115,24 @@ async function main(): Promise<void> {
   const args = parseArgs();
 
   const rows = args.qid
-    ? await db.execute<{ qid: string; name: string; tier: number }>(sql`
-        SELECT qid, name, tier FROM entities WHERE qid = ${args.qid}
+    ? await db.execute<{
+        qid: string;
+        name: string;
+        tier: number;
+        date_start: number | null;
+        date_end: number | null;
+      }>(sql`
+        SELECT qid, name, tier, date_start, date_end
+        FROM entities WHERE qid = ${args.qid}
       `)
-    : await db.execute<{ qid: string; name: string; tier: number }>(sql`
-        SELECT qid, name, tier
+    : await db.execute<{
+        qid: string;
+        name: string;
+        tier: number;
+        date_start: number | null;
+        date_end: number | null;
+      }>(sql`
+        SELECT qid, name, tier, date_start, date_end
         FROM entities
         WHERE tier >= 2
           ${args.tier3Only ? sql`AND tier = 3` : sql``}
@@ -144,11 +157,18 @@ async function main(): Promise<void> {
     );
     try {
       // Parallel — Met has 80 req/sec, the other two are key-gated and
-      // skip immediately when no key is set.
+      // skip immediately when no key is set. Entity dates flow into the
+      // date-window filter inside each client so e.g. 1850s Hannibal
+      // Hamlin candidates fail for the Carthaginian general entity.
+      const entityOpts = {
+        limit: 3,
+        entityDateStart: r.date_start,
+        entityDateEnd: r.date_end,
+      };
       const [metObjs, siObjs, euObjs] = await Promise.all([
-        searchMet(r.name, { limit: 3 }),
-        searchSmithsonian(r.name, { limit: 3 }),
-        searchEuropeana(r.name, { limit: 3 }),
+        searchMet(r.name, entityOpts),
+        searchSmithsonian(r.name, entityOpts),
+        searchEuropeana(r.name, entityOpts),
       ]);
       const candidates: InsertSource[] = [
         ...metObjs.map(fromMet),

@@ -18,20 +18,35 @@ import { sql, eq, inArray } from "drizzle-orm";
 
 import { db } from "../lib/db";
 import { media } from "../lib/db/schema";
-import { nameMatchesHaystack } from "../lib/media/relevance";
+import {
+  dateWindowAccepts,
+  isNaturalScienceSource,
+  looksLikeTaxonomicSpecimen,
+  nameMatchesHaystack,
+} from "../lib/media/relevance";
 
 async function main(): Promise<void> {
   const apply = process.argv.includes("--apply");
 
-  // Pull museum-source rows joined with their entity name.
+  // Pull museum-source rows joined with their entity context (incl.
+  // date range) so the date-window filter has the signal it needs.
   const rows = await db.execute<{
     id: number;
     entity_qid: string;
     entity_name: string;
+    date_start: number | null;
+    date_end: number | null;
     attribution: string;
     caption: string | null;
   }>(sql`
-    SELECT m.id, m.entity_qid, e.name AS entity_name, m.attribution, m.caption
+    SELECT
+      m.id,
+      m.entity_qid,
+      e.name AS entity_name,
+      e.date_start,
+      e.date_end,
+      m.attribution,
+      m.caption
     FROM media m
     JOIN entities e ON e.qid = m.entity_qid
     WHERE
@@ -45,14 +60,27 @@ async function main(): Promise<void> {
       `(${apply ? "APPLY: will delete failures" : "dry-run: no deletes"})\n`,
   );
 
-  const toDelete: number[] = [];
+  const toDelete: { id: number; reason: string }[] = [];
   for (const r of list) {
-    const haystack = [r.attribution, r.caption ?? ""].join(" ");
+    const caption = r.caption ?? "";
+    const haystack = [r.attribution, caption].join(" ");
+    let reason: string | null = null;
     if (!nameMatchesHaystack(r.entity_name, haystack)) {
-      toDelete.push(r.id);
+      reason = "no name match";
+    } else if (looksLikeTaxonomicSpecimen(caption)) {
+      reason = "taxonomic specimen title";
+    } else if (isNaturalScienceSource(r.attribution, caption)) {
+      reason = "natural-science source";
+    } else if (!dateWindowAccepts(r.date_start, r.date_end, caption)) {
+      // Only check the caption — attribution strings include URLs like
+      // /item/12345/abc1850 where the digits look like years but aren't.
+      reason = "date out of window";
+    }
+    if (reason) {
+      toDelete.push({ id: r.id, reason });
       console.log(
         `  drop  ${r.entity_qid.padEnd(10)} ${r.entity_name.slice(0, 22).padEnd(22)} ` +
-          `caption="${(r.caption ?? "").slice(0, 60)}"`,
+          `[${reason}]  caption="${caption.slice(0, 56)}"`,
       );
     }
   }
@@ -62,7 +90,8 @@ async function main(): Promise<void> {
   );
 
   if (apply && toDelete.length > 0) {
-    await db.delete(media).where(inArray(media.id, toDelete));
+    const ids = toDelete.map((d) => d.id);
+    await db.delete(media).where(inArray(media.id, ids));
     console.log(`Deleted ${toDelete.length} rows.`);
   } else if (toDelete.length > 0) {
     console.log("Re-run with --apply to delete.");
@@ -71,10 +100,19 @@ async function main(): Promise<void> {
   // Side-check: are any entities now orphaned (zero media rows)? Just
   // print the count for awareness; we don't act on it.
   if (apply && toDelete.length > 0) {
-    const affectedQids = [...new Set(list.filter((r) => toDelete.includes(r.id)).map((r) => r.entity_qid))];
+    const deletedIds = new Set(toDelete.map((d) => d.id));
+    const affectedQids = [
+      ...new Set(
+        list.filter((r) => deletedIds.has(r.id)).map((r) => r.entity_qid),
+      ),
+    ];
     let stillHasOther = 0;
     for (const qid of affectedQids) {
-      const remaining = await db.select({ id: media.id }).from(media).where(eq(media.entityQid, qid)).limit(1);
+      const remaining = await db
+        .select({ id: media.id })
+        .from(media)
+        .where(eq(media.entityQid, qid))
+        .limit(1);
       if (remaining.length > 0) stillHasOther += 1;
     }
     console.log(
