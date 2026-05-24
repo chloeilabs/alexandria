@@ -210,3 +210,25 @@ Free on the Hobby plan, no cookies (no GDPR banner), beacon-only (no perf cost).
 - **Usage:** Vercel Analytics.
 - **DB health:** `/api/health` endpoint queries `SELECT 1` + entity count + most-recent fact-check timestamp.
 - **AI spend:** `pipeline_runs` table tracks every call; `pipeline/audit/coverage-report.ts` reads it.
+
+---
+
+## 2026-05-24 — Anti-Western-bias audit + targeted density push
+
+The May 2026 coverage audit (`pipeline/audit/coverage-report.ts` against Neon) revealed Western-European civs sitting at 12–21 entries each while non-European civs (Bantu, Austronesian, Indus Valley, Mongol successors, Mughal, SE Asian, Southern Indian, Vedic/Mauryan) were at 7–9. Anti-Western-bias is the project's stated spine, so a corrective batch was warranted.
+
+**Action:** `scripts/seed-batch-7.ts` — 66 titles, all non-European, targeted at the audit gaps. 55 returned valid QIDs; the chain produced 14 net-new Tier 2 entries (the remaining 41 had already been seeded earlier). The thinnest civs moved 7→9, 8→12, 9→11 across the matrix.
+
+**Net delta on production:** 362 → 376 entities, with gap civilizations gaining 1–4 entries each. Indian-ocean-trade and Silk-Roads (already the two largest civs) widened their lead, both being explicit anti-Western-default trade networks.
+
+---
+
+## 2026-05-24 — Wikipedia XML matcher: unique-name lookup, not sitelinks (yet)
+
+The bulk Wikipedia matcher (`pipeline/bulk/import-wikipedia-dump.ts`) needs to map Wikipedia article titles → Wikidata QIDs so each entity can have its source text attached. The natural join is `sitelinks.enwiki.title` on the Wikidata entity, but we didn't capture that column during the Wikidata bulk import (`pipeline/bulk/import-wikidata-dump.ts` stores name + aliases + dates + coords, no sitelinks).
+
+The first pragmatic attempt — match by entity name + alias — produced systematic mis-tagging: Wikidata has many entities sharing the same English label (29 places called "Buenavista", 14 "Buenos Aires"es, 9 "Symphony No. 3"s, an "Alexander the Great" tagged type='work' that's separate from the real person Q8409). A first-wins resolution gave "Alexander the Great" Wikipedia article text to a work, not a person.
+
+**Fix:** restrict the lookup map to entity names that are **unique** in the corpus (one entity per lowercased name); drop aliases entirely. This gives 225,385 lookups out of 233,500 entities (96.2% coverage) with vastly fewer false positives. Names of entities still mis-classified in our bulk DB (Albert Einstein as type='place') aren't fixed by this — that's an upstream extractor issue.
+
+**Reconsider when:** the bulk Wikidata ingest is re-run with `sitelinks.enwiki.title` captured into the entities table. That would let the matcher use a clean 1:1 join and recover the ~3.8% recall lost here.
