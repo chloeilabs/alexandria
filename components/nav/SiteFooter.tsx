@@ -9,10 +9,7 @@ const YEAR_BUILT = "2026";
 
 export function SiteFooter() {
   return (
-    <footer
-      className="mt-32 border-t border-border bg-background"
-      role="contentinfo"
-    >
+    <footer className="mt-32 border-t border-border bg-background">
       <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-3 gap-y-10 gap-x-12">
         {/* Mast — brand + one-line tagline */}
         <div className="space-y-3">

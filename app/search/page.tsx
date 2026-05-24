@@ -69,11 +69,14 @@ export default async function SearchPage({ searchParams }: PageProps) {
         <input
           id="q"
           name="q"
+          type="search"
           defaultValue={query}
           placeholder="Search the Library…"
           autoFocus
           autoComplete="off"
           spellCheck="false"
+          inputMode="search"
+          enterKeyHint="search"
           className="w-full bg-transparent border-b border-border px-0 py-4 text-3xl md:text-4xl font-display font-light focus:outline-none focus:border-accent text-foreground placeholder:text-muted-foreground/60 transition-colors"
         />
         {/* Preserve filter state when the user types */}
@@ -135,7 +138,7 @@ export default async function SearchPage({ searchParams }: PageProps) {
                 <li key={s}>
                   <Link
                     href={`/search?q=${encodeURIComponent(s)}`}
-                    className="hover:text-accent transition-colors focus:outline-none focus-visible:text-accent"
+                    className="hover:text-accent transition-colors focus:outline-none focus-visible:text-accent focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
                   >
                     {s}
                   </Link>
@@ -154,7 +157,7 @@ export default async function SearchPage({ searchParams }: PageProps) {
                   <li key={s.qid}>
                     <Link
                       href={`/entity/${s.slug}`}
-                      className="group flex items-baseline gap-4 flex-wrap focus:outline-none"
+                      className="group flex items-baseline gap-4 flex-wrap focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
                     >
                       <span className="font-display text-xl text-foreground group-hover:text-accent group-focus-visible:text-accent transition-colors">
                         {s.name}
@@ -186,7 +189,7 @@ export default async function SearchPage({ searchParams }: PageProps) {
               <li key={h.qid} className="py-7">
                 <Link
                   href={`/entity/${h.slug}`}
-                  className="block group focus:outline-none"
+                  className="block group focus:outline-none focus-visible:outline-1 focus-visible:outline-accent focus-visible:outline-offset-4"
                 >
                   <div className="flex items-baseline gap-4 flex-wrap mb-2">
                     <h3 className="font-display text-2xl md:text-3xl text-foreground group-hover:text-accent group-focus-visible:text-accent transition-colors">

@@ -161,7 +161,7 @@ export function EntityPage({ data }: { data: EntityPageData }) {
           {entity.tier >= 3 && (
             <span
               className="border border-accent/40 text-accent px-2 py-[2px] tracking-[0.2em]"
-              title="A curated long-form entry with hand-picked imagery."
+              aria-label="Tier 3 curated entry — hand-picked imagery and long-form prose"
             >
               Tier 3 · Curated
             </span>
@@ -171,16 +171,18 @@ export function EntityPage({ data }: { data: EntityPageData }) {
           {entity.name}
         </h1>
         {aliases.length > 0 && (
-          <div className="mt-8 grid grid-cols-[7rem_1fr] gap-x-6 gap-y-1 items-baseline">
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80">
+          <dl className="mt-8 grid grid-cols-[7rem_1fr] gap-x-6 gap-y-1 items-baseline">
+            <dt className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground/80">
               Also known as
-            </span>
-            <ul className="flex flex-wrap gap-x-5 gap-y-1 font-display italic text-lg text-muted-foreground">
-              {aliases.slice(0, 6).map((a) => (
-                <li key={`${a.alias}-${a.language}`}>{a.alias}</li>
-              ))}
-            </ul>
-          </div>
+            </dt>
+            <dd className="m-0">
+              <ul className="flex flex-wrap gap-x-5 gap-y-1 font-display italic text-lg text-muted-foreground">
+                {aliases.slice(0, 6).map((a) => (
+                  <li key={`${a.alias}-${a.language}`}>{a.alias}</li>
+                ))}
+              </ul>
+            </dd>
+          </dl>
         )}
       </header>
 
