@@ -15,7 +15,7 @@ import { entities, threads } from "@/lib/db/schema";
 import { getAllCivilizationSlugs } from "@/lib/db/queries/civilization";
 import { ERAS } from "@/lib/search";
 
-const BASE_URL = "https://alexandria-chloei.vercel.app";
+const BASE_URL = "https://alexandria.chloei.ai";
 
 export const dynamic = "force-dynamic";
 

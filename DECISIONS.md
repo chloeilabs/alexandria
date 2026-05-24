@@ -40,13 +40,13 @@ Filtering Wikidata's ~115M entities down to ~5M historically-relevant ones is th
 
 ---
 
-## 2026-05-22 — Region taxonomy: hybrid (UN subregions + ~40 civilizational tags)
+## 2026-05-22 — Region taxonomy: hybrid (UN subregions + 47 civilizational tags)
 
 Each entity carries two region tags: an algorithmic UN subregion (from P17 country or coordinates) AND zero-or-more curated civilizational tags.
 
 **Reasoning:** Modern regions alone fail for cross-border civilizations (Mongol Khanate, Islamic Caliphates, Roman Empire). Civilizational alone is hard to populate algorithmically. The hybrid lets the ranker filter on either dimension and lets the homepage rotation algorithm enforce "no region appears more than 2×" using whichever dimension makes sense.
 
-The civilizational tag list itself is an editorial artifact — see `OPEN_QUESTIONS.md` for the draft taxonomy that needs review before bulk tagging.
+The civilizational tag list itself is an editorial artifact. The current closed taxonomy lives in `lib/regions/civilizational-taxonomy.ts`; reopen `OPEN_QUESTIONS.md` Q2 if editorial review changes it.
 
 ---
 
@@ -66,7 +66,7 @@ The brief said Node 22 LTS. We installed Node 24 because it's the current active
 
 ---
 
-## 2026-05-22 — Coordinates: float8 lat/lon columns, no PostGIS
+## 2026-05-22 — Coordinates: float4 / `real` lat/lon columns, no PostGIS
 
 The brief mentioned PostGIS point. We use plain `real` (float4) columns for latitude and longitude.
 
@@ -133,7 +133,7 @@ The following are explicitly deferred. Each is mentioned in the brief's roadmap 
 
 ## 2026-05-23 — Switched to GitHub remote + Vercel production deployment
 
-The original brief was "local only. No GitHub remote. Ever." Overridden after explicit user request. The repo is now public at github.com/chloeilabs/alexandria; the site is live at alexandria-chloei.vercel.app on the Vercel Hobby tier.
+The original brief was "local only. No GitHub remote. Ever." Overridden after explicit user request. The repo is now public at github.com/chloeilabs/alexandria; the site is live at alexandria.chloei.ai on the Vercel Hobby tier.
 
 **What changed:**
 - Production DB is now Neon (Vercel marketplace integration), not local Docker Postgres.
@@ -171,7 +171,7 @@ Postgres tsvector + GIN handles keyword matching; pgvector HNSW handles semantic
 
 ## 2026-05-23 — Britannica 1911 hit rate: 22%, not the projected 60%+
 
-`lib/wikisource/index.ts` looks up the 1911 Encyclopædia Britannica via Wikisource. Of 297 Tier 2 entities probed, 67 (22%) have a matching article.
+`lib/wikisource/index.ts` looks up the 1911 Encyclopædia Britannica via Wikisource. In the 2026-05-23 snapshot, 67 of 297 Tier 2 entities probed (22%) had a matching article.
 
 **Coverage profile:** dense for classical antiquity, European medieval / early-modern, and 19th-century European figures. Sparse for non-Western and 20th-century subjects (expected — the 1911 edition reflects what British scholars covered in 1911).
 

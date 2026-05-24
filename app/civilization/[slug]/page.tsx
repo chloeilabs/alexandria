@@ -47,7 +47,7 @@ export async function generateMetadata({
   };
 }
 
-const BASE_URL = "https://alexandria-chloei.vercel.app";
+const BASE_URL = "https://alexandria.chloei.ai";
 
 export default async function CivilizationRoute({ params }: PageProps) {
   const { slug } = await params;

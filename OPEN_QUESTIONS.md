@@ -1,28 +1,22 @@
 # Open Questions
 
-Items I need editorial input on. Engineering decisions are in `DECISIONS.md`. Anything that requires your taste, your budget, or your knowledge of a specific historical claim goes here.
+Items I need editorial input on. Engineering decisions are in `DECISIONS.md`. Resolved items stay here with pointers so future agents do not reopen old questions by accident.
 
 ---
 
-## Q1 — Embedding provider for semantic search
+## Q1 — RESOLVED: Embedding provider for semantic search
 
-Anthropic has no first-party embeddings API. Three options:
+Resolved 2026-05-23 in `DECISIONS.md`: production uses `voyage/voyage-3-large` through Vercel AI Gateway.
 
-| Option | Cost (5M entities × ~200 tokens) | Notes |
-|---|---|---|
-| **Local `bge-large-en-v1.5` via Transformers.js / ONNX** | $0 | Runs on laptop CPU/MPS. Slower per-call but no per-request cost. **Recommended for cost discipline.** |
-| Voyage `voyage-3-large` | ~$180 | Anthropic-recommended for embedding. 1024-dim. |
-| OpenAI `text-embedding-3-large` | ~$130 | 3072-dim (downsample to 1024 ours). Mature. |
+The schema stores `vector(1024)`, matching Voyage 3 large exactly. At the current curated-corpus size the full embedding run costs about $0.02, so quality and operational simplicity beat the earlier local-ONNX cost argument.
 
-The schema currently reserves `vector(1024)`. Local bge-large is 1024-dim, Voyage is 1024, OpenAI is 3072 (truncated).
-
-**Default until you say otherwise:** local bge-large via ONNX. Switch to Voyage if quality bites.
+**Reopen if:** the multi-million-row local bulk DB needs embeddings. At that scale, local `bge-large-en-v1.5` becomes the cost-disciplined default again.
 
 ---
 
-## Q2 — Civilizational tag taxonomy (~40 tags)
+## Q2 — RESOLVED: Civilizational tag taxonomy (47 tags)
 
-The hybrid region taxonomy assigns 0–3 civilizational tags per entity using a Haiku-based classifier. The classifier needs a fixed tag list. Draft proposed below — please review, edit, and approve before I run bulk tagging (task #6).
+The hybrid region taxonomy assigns 0-3 civilizational tags per entity using the Vercel AI Gateway model configured in `lib/ai/index.ts`. The closed 47-tag list below is implemented in `lib/regions/civilizational-taxonomy.ts`; `scripts/tag-all.ts` applies it to the corpus.
 
 ### Proposed civilizational tags
 
@@ -91,13 +85,13 @@ The hybrid region taxonomy assigns 0–3 civilizational tags per entity using a 
 - industrial-revolution
 - world-wars-era
 
-**Action needed:** Edit this list. Add tags I missed. Cut overlaps. Once you approve, I freeze it and tag the corpus.
+**Reopen if:** editorial review finds a missing civilization or an overlap that materially distorts the anti-Western-bias audit.
 
 ---
 
 ## Q3 — Stanford Encyclopedia of Philosophy license (CC BY-NC-SA)
 
-SEP is CC BY-NC-SA. Non-commercial. The local-only nature of the project keeps us safely in the NC bucket.
+SEP is CC BY-NC-SA. Non-commercial. Alexandria is now public on Vercel, so SEP-derived text is acceptable only while the project stays non-commercial and source attribution remains explicit.
 
 **Action needed:** Confirm we never go commercial without first removing SEP-derived content, OR drop SEP from the source list and use only fully-permissive sources.
 
@@ -107,19 +101,19 @@ SEP is CC BY-NC-SA. Non-commercial. The local-only nature of the project keeps u
 
 ## Q4 — Historical boundary layers (8+ across all continents)
 
-The map needs at least 8 historical boundary layers spanning all continents. OpenHistoricalMap covers a lot but not everything. Need to confirm coverage for each priority civilization.
+The map now ships 8 hand-authored simplified GeoJSON layers in `public/historical-boundaries.geojson`.
 
-Priority list:
+Current layer list:
 - Roman Empire (peak Trajan, c. 117 CE)
-- Han Dynasty (c. 87 BCE)
+- Han Dynasty (c. 100 CE)
 - Mongol Khanate (c. 1294 CE)
 - Songhai Empire (c. 1550 CE)
 - Inca Empire (c. 1525 CE)
-- Tokugawa Japan (c. 1700 CE)
 - Maurya Empire (c. 250 BCE)
 - Ottoman Empire (c. 1683 CE)
+- Achaemenid Empire (c. 500 BCE)
 
-**Action needed:** I will survey OpenHistoricalMap coverage when I get to the map task. If any of these are missing, I will flag them here and we will decide whether to hand-author GeoJSON or pick a substitute civilization.
+**Action needed:** Decide whether Tokugawa Japan should be added as a ninth hand-authored layer or remain deferred.
 
 ---
 
@@ -131,11 +125,11 @@ Plan targets ~5M Tier 0 entities. Real number depends on how aggressive the regi
 
 ---
 
-## Q6 — API key + budget raise
+## Q6 — RESOLVED: API key + budget raise
 
-The pipeline cannot run Tier 1+ enrichment until `ANTHROPIC_API_KEY` is set in `.env.local`. Default budget is `DAILY_BUDGET_USD=20` (hard cap).
+The pipeline uses `AI_GATEWAY_API_KEY`, not `ANTHROPIC_API_KEY`. Default budget remains `DAILY_BUDGET_USD=20` (hard cap), enforced by `pipeline/budget.ts`.
 
-**Action needed:** Set the API key when you're ready to start enrichment. Raise the budget anytime — it's a single env var change.
+**Action needed:** Raise `DAILY_BUDGET_USD` only for intentional larger enrichment runs.
 
 ---
 

@@ -58,7 +58,7 @@ export const entities = pgTable(
     dateEnd: integer("date_end"),
     dateEndPrecision: varchar("date_end_precision", { length: 16 }),
 
-    // Geography: plain float8 columns. MapLibre handles rendering — we
+    // Geography: plain float4/real columns. MapLibre handles rendering — we
     // don't need PostGIS for the queries we run. See DECISIONS.md.
     latitude: real("latitude"),
     longitude: real("longitude"),

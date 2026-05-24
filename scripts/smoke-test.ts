@@ -63,7 +63,7 @@ interface Args {
 }
 
 function parseArgs(argv: readonly string[]): Args {
-  let base = "https://alexandria-chloei.vercel.app";
+  let base = "https://alexandria.chloei.ai";
   let json = false;
   let timeoutMs = 20_000;
   for (const a of argv) {

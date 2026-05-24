@@ -13,7 +13,7 @@ import { withRetry } from "@/lib/db/retry";
 import { threads } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
 
-const BASE_URL = "https://alexandria-chloei.vercel.app";
+const BASE_URL = "https://alexandria.chloei.ai";
 
 export const dynamic = "force-dynamic";
 // RSS is small; revalidate per minute is plenty.

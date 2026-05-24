@@ -5,7 +5,7 @@ import { EntityPage } from "@/components/entity/EntityPage";
 import { getEntityBySlug } from "@/lib/db/queries/entity";
 import { firstSentence } from "@/lib/format";
 
-const BASE_URL = "https://alexandria-chloei.vercel.app";
+const BASE_URL = "https://alexandria.chloei.ai";
 
 interface PageProps {
   params: Promise<{ slug: string }>;

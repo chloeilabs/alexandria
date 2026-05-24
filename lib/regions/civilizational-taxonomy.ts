@@ -2,8 +2,7 @@
 // 0-3 of these tags by the tag.ts worker. List is intentionally
 // global and lean toward non-Western buckets (see DECISIONS.md).
 //
-// Editorially this is a draft list — it's documented in
-// OPEN_QUESTIONS.md and may be edited before being locked.
+// Editorial changes should update OPEN_QUESTIONS.md Q2 and DECISIONS.md.
 
 export const CIVILIZATIONAL_TAGS = [
   // --- Sub-Saharan Africa ---

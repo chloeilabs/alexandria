@@ -1,7 +1,29 @@
-# Day-One Acceptance Criteria — Verification
+# Verification
 
-Snapshot after the second build push. See `DECISIONS.md` for context and
-`OPEN_QUESTIONS.md` for outstanding editorial items.
+This file preserves the day-one acceptance snapshot after the second build push. For current architecture decisions, use `DECISIONS.md`; for unresolved editorial items, use `OPEN_QUESTIONS.md`.
+
+## Current production snapshot
+
+Checked via `https://alexandria.chloei.ai/api/health` on 2026-05-24:
+
+```
+376 entities
+2 Tier 0, 5 Tier 1, 359 Tier 2, 10 Tier 3
+368 fact-check reviews tracked
+Featured cache refreshed at 03:00 UTC
+```
+
+## Current verification commands
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm smoke
+```
+
+`pnpm smoke` checks the production site across 19 public surfaces. Local app verification follows `AGENTS.md`: start Docker Postgres, run `pnpm db:migrate`, seed if needed, then run `pnpm dev`.
+
+## Historical day-one snapshot
 
 ## Corpus
 
@@ -15,7 +37,7 @@ Total session API spend: $1.62 (summarize $0.28, narrate $1.14, tags $0.20)
 Budget remaining today: $18.38 of $20.00
 ```
 
-## Acceptance Criteria — final
+## Acceptance Criteria — day-one snapshot
 
 ### 1. `pnpm dev` and `pnpm pipeline` in two terminals; both run; site renders
 
@@ -53,9 +75,8 @@ Empire, Inca Empire, Khmer Empire, and several others. The full set the
 brief calls out (Han, Bronze Age, Maya) is present-but-partial: Han
 Dynasty entry exists; "Bronze Age Collapse" is a synthetic entity in the
 brief that isn't on Wikipedia under that exact title; "Maya classical
-collapse" likewise isn't its own article. Adding pgvector embeddings
-(semantic search) would surface these via summaries alone, even without
-matching titles. That's the obvious next quality lift.
+collapse" likewise isn't its own article. Since this snapshot, pgvector
+embeddings and hybrid RRF search have shipped; see `DECISIONS.md`.
 
 ### 6. Timeline shows visual rhythm across all eras and regions, not just a Western spine
 
@@ -105,25 +126,13 @@ The only "not fully passing" item is #8 and it's not testable without
 actually running the 80GB Wikidata dump — the parser is built, tested
 against synthetic data, and well above the throughput bar.
 
-## Follow-ups (in priority order)
+## Historical follow-ups — current status
 
-1. **Bulk Wikidata dump ingestion.** Download the 80GB dump and run
-   `pnpm pipeline:wikidata` — completes day-one criterion #8 + grows
-   the corpus from 60 → 5M Tier 0 entities. The parser is checkpointed
-   and idempotent; safe to start, stop, resume.
-2. **Multi-source Tier 2.** The brief specified Wikipedia + 1911
-   Britannica + others. Currently we synthesize from Wikipedia only.
-   Adding a Britannica fetcher (Project Gutenberg / Wikisource) and
-   passing both sources to the narrate prompt would deliver on the
-   multi-source synthesis decision in DECISIONS.md.
-3. **pgvector embeddings.** Schema is reserved (`vector(1024)` column,
-   IVFFLAT during seed → HNSW post-seed). Once an embedding provider is
-   selected (Open Question Q1), wire it into `pipeline/workers/embed.ts`
-   and the search query upgrades to RRF over FTS + cosine.
-4. **Wikimedia Commons media.** The `fetch-media` worker hook exists in
-   the pipeline scaffold; needs implementation. Brings hero images and
-   inline period art into entity pages.
-5. **"Mediterranean in 218 BCE" time-slice entity model.** Currently we
+1. **Bulk Wikidata dump ingestion:** partially done for the local research DB; production remains intentionally curated.
+2. **Multi-source Tier 2:** shipped for Wikipedia plus 1911 Britannica where available.
+3. **pgvector embeddings:** shipped with Voyage 3 large and hybrid FTS/vector Reciprocal Rank Fusion.
+4. **Wikimedia Commons media:** shipped via `scripts/fetch-media.ts`.
+5. **"Mediterranean in 218 BCE" time-slice entity model:** still open. Currently we
    model entities, not snapshots of them. Adding a time-slice view would
    complete criterion #4's specific traversal AND give the map a real
    time-slider when paired with OpenHistoricalMap vector tiles.
