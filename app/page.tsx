@@ -5,6 +5,7 @@ import {
 } from "@/lib/db/queries/entity";
 import { getFeaturedThread } from "@/lib/db/queries/thread";
 import { fmtYear, regionLabel } from "@/lib/format";
+import { APP_DESCRIPTION } from "@/lib/site";
 
 // Force per-request rendering. The DB lives off the build VM (Neon),
 // so static prerender would either fail or capture stale state. We'd
@@ -32,8 +33,7 @@ export default async function Home() {
           Alexandria
         </h1>
         <p className="mt-6 font-display italic text-2xl text-muted-foreground max-w-xl leading-snug">
-          A living digital encyclopedia of human civilization. Begin
-          anywhere; follow the threads.
+          {APP_DESCRIPTION} Begin anywhere; follow the threads.
         </p>
         <p className="mt-10 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
           {hasContent ? `${allEntities.length} entries` : "Awaiting the seed"}

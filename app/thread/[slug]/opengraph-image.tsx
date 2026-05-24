@@ -3,6 +3,7 @@
 
 import { ImageResponse } from "next/og";
 import { getThreadBySlug } from "@/lib/db/queries/thread";
+import { APP_DESCRIPTION } from "@/lib/site";
 
 export const alt = "Alexandria";
 export const size = { width: 1200, height: 630 };
@@ -136,7 +137,7 @@ export default async function Image({ params }: Props) {
             zIndex: 1,
           }}
         >
-          A digital encyclopedia of human civilization
+          {APP_DESCRIPTION}
         </div>
       </div>
     ),

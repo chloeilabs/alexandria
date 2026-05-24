@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { EntityPage } from "@/components/entity/EntityPage";
 import { getEntityBySlug } from "@/lib/db/queries/entity";
 import { firstSentence } from "@/lib/format";
+import { APP_DESCRIPTION } from "@/lib/site";
 
 const BASE_URL = "https://alexandria.chloei.ai";
 
@@ -66,7 +67,7 @@ function buildArticleLd(
   const description =
     entity.summary
       ? firstSentence(entity.summary, 200)
-      : `An entry in Alexandria, a digital encyclopedia of human civilization.`;
+      : `An entry in Alexandria. ${APP_DESCRIPTION}`;
   const url = `${BASE_URL}/entity/${slug}`;
 
   // datePublished — use tier_upgraded_at if available, else updatedAt.

@@ -4,6 +4,7 @@ import { SiteNav } from "@/components/nav/SiteNav";
 import { SiteFooter } from "@/components/nav/SiteFooter";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
+import { APP_DESCRIPTION } from "@/lib/site";
 import "./globals.css";
 
 const inter = Inter({
@@ -27,8 +28,7 @@ const jetbrains = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Alexandria",
-  description:
-    "A living digital encyclopedia of human civilization — from the Indus Valley to the Songhai Empire to the present day.",
+  description: APP_DESCRIPTION,
 };
 
 // Without this, mobile browsers render the page at a 980px default
