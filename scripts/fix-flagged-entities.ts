@@ -27,22 +27,33 @@ async function main(): Promise<void> {
     }
   }
 
-  // Tier 2 entities with the most flagged claims, descending. Skip
-  // Tier 3 (already hand-curated; their narratives are deliberately
-  // different).
+  // Tier 2 entities with the most flagged claims on their MOST RECENT
+  // review, descending. Critical: use DISTINCT ON (entity_qid) to fold
+  // multiple historical reviews per entity down to just the latest one.
+  // Without this, a previously-bad entity that's since been re-narrated
+  // clean would still surface as "worst-flagged" off its old row.
+  //
+  // Skip Tier 3 (already hand-curated; their narratives are deliberately
+  // different and the fact-checker only sees the auto-generated source set).
   const rows = await db.execute<{
     qid: string;
     name: string;
     slug: string;
     flag_count: number;
   }>(sql`
+    WITH latest AS (
+      SELECT DISTINCT ON (entity_qid)
+             entity_qid, status, flagged_claims, created_at
+      FROM fact_check_reviews
+      ORDER BY entity_qid, created_at DESC
+    )
     SELECT e.qid, e.name, e.slug,
-           jsonb_array_length(r.flagged_claims) AS flag_count
+           jsonb_array_length(l.flagged_claims) AS flag_count
     FROM entities e
-    JOIN fact_check_reviews r ON r.entity_qid = e.qid
-    WHERE r.status = 'flagged'
+    JOIN latest l ON l.entity_qid = e.qid
+    WHERE l.status = 'flagged'
       AND e.tier = 2
-    ORDER BY jsonb_array_length(r.flagged_claims) DESC
+    ORDER BY jsonb_array_length(l.flagged_claims) DESC
     LIMIT ${limit}
   `);
   const list = Array.from(rows);

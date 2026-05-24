@@ -102,6 +102,7 @@ Required env vars (set in Vercel project):
 | `pnpm build` | Production build |
 | `pnpm typecheck` | TypeScript strict check |
 | `pnpm lint` | ESLint (Next.js flat config) |
+| `pnpm smoke` | End-to-end smoke test against production (19 surfaces) |
 | `pnpm db:generate` | Generate a new Drizzle migration |
 | `pnpm db:migrate` | Apply pending migrations |
 | `pnpm db:studio` | Open Drizzle Studio |

@@ -16,6 +16,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "smoke": "tsx scripts/smoke-test.ts",
     "pipeline": "tsx pipeline/index.ts",
     "pipeline:wikidata": "tsx pipeline/bulk/import-wikidata-dump.ts",
     "pipeline:wikipedia": "tsx pipeline/bulk/import-wikipedia-dump.ts",

@@ -82,9 +82,12 @@ export async function GET() {
           FROM entities
         ),
         reviews AS (
+          -- Count DISTINCT entities reviewed (not raw rows): re-runs
+          -- of fix-flagged-entities insert additional rows per entity,
+          -- so a naive COUNT(*) inflates the coverage metric.
           SELECT
             MAX(created_at) AS most_recent_review,
-            COUNT(*)::int AS total_reviews
+            COUNT(DISTINCT entity_qid)::int AS total_reviews
           FROM fact_check_reviews
         ),
         cache AS (
