@@ -128,4 +128,85 @@ The following are explicitly deferred. Each is mentioned in the brief's roadmap 
 - 3D map (gimmicky, omitted)
 - Mobile-first layout (desktop-primary; mobile graceful)
 - Multi-language UI (English UI only; entity data multilingual via aliases)
-- GitHub remote / CI / PR workflows (local-only forever)
+
+---
+
+## 2026-05-23 — Switched to GitHub remote + Vercel production deployment
+
+The original brief was "local only. No GitHub remote. Ever." Overridden after explicit user request. The repo is now public at github.com/chloeilabs/alexandria; the site is live at alexandria-chloei.vercel.app on the Vercel Hobby tier.
+
+**What changed:**
+- Production DB is now Neon (Vercel marketplace integration), not local Docker Postgres.
+- Local Docker Postgres on port 5434 is reserved for the bulk Wikidata dump research index (~250K+ entities ingested) — it doesn't ship to Neon.
+- `.gitignore` strictly excludes `.env.prod`, `.env.production*`, and the `.vercel/` directory; GitHub push protection caught one near-miss on the Neon password leak; the rule is now defensive.
+- The original constraint was correct caution. The decision to ship it publicly was a deliberate change of plan; the security posture got tightened in response, not relaxed.
+
+**Implications:**
+- Production has a fundamentally different data footprint than the local dev DB.
+- Drizzle migrations must be applied to both. We've done this manually so far via a tsx script reading the migration SQL; a `pnpm db:migrate:prod` script with the right env wiring is on the to-do list.
+
+---
+
+## 2026-05-23 — Embedding provider: Voyage 3 large via AI Gateway
+
+OPEN_QUESTIONS.md flagged this; resolved 2026-05-23.
+
+**Choice:** `voyage/voyage-3-large` through Vercel AI Gateway. 1024-dim cosine-friendly embeddings; matches `entities.embedding vector(1024)` exactly. ~$0.18 per million tokens.
+
+**Why not local bge-large-en-v1.5:** the original recommendation was to save the $180 projected for 5M entities. At our actual curated corpus size (~350 entities) the full embed run cost $0.02, so the cost-saving argument doesn't matter. Voyage's quality and the operational simplicity of "same gateway as the LLM" win.
+
+**Reconsider if:** the bulk Wikidata dump local DB ever needs embeddings on its multi-million Tier 0 stubs. At that point local bge is again the right choice.
+
+---
+
+## 2026-05-23 — Hybrid search: FTS + pgvector via Reciprocal Rank Fusion
+
+Postgres tsvector + GIN handles keyword matching; pgvector HNSW handles semantic neighborhoods. RRF (k=60) combines them.
+
+**Why RRF over weighted score average:** `ts_rank` and cosine similarity live on entirely different scales, and the cosine distribution shifts with corpus size. RRF only consumes the *position* of a hit within each list, so it's robust to all of that. The k=60 default is the constant from the original RRF paper (Cormack et al., 2009).
+
+**Acceptance test verified:** "fall of an empire" returns Babylon / Constantinople / Khmer / Songhai / Roman in the fused result. FTS alone surfaced only keyword matches; vector alone over-indexed on canonical Western empires.
+
+---
+
+## 2026-05-23 — Britannica 1911 hit rate: 22%, not the projected 60%+
+
+`lib/wikisource/index.ts` looks up the 1911 Encyclopædia Britannica via Wikisource. Of 297 Tier 2 entities probed, 67 (22%) have a matching article.
+
+**Coverage profile:** dense for classical antiquity, European medieval / early-modern, and 19th-century European figures. Sparse for non-Western and 20th-century subjects (expected — the 1911 edition reflects what British scholars covered in 1911).
+
+**Implications:** Multi-source synthesis only kicks in on those 22%. The other 78% still get single-source (Wikipedia) Tier 2 narratives. Both paths are clearly labelled in the entity-page Sources footer.
+
+---
+
+## 2026-05-23 — Vercel Cron for nightly featured rotation
+
+pg-boss is used for the in-pipeline job queue (local). For production scheduled tasks (Vercel serverless can't run a persistent worker), we use Vercel Cron Jobs.
+
+**Wiring:** `vercel.json` declares `crons: [{ path: "/api/cron/refresh-featured", schedule: "0 3 * * *" }]`. Vercel hits the route at 03:00 UTC with `Authorization: Bearer ${CRON_SECRET}`. The route writes a row to `featured_cache`; `getFeaturedEntities` reads cache first, falls back to live compute if cache > 36h old.
+
+**One footgun:** the CRON_SECRET must be set via env without trailing whitespace. The Vercel build fails the deploy if the env value contains leading/trailing whitespace (a leftover newline from a `node -e` invocation cost us one deploy attempt).
+
+---
+
+## 2026-05-23 — Tier 3 source-trim: 6K chars per source
+
+The Tier 3 narrate prompt has a 5,500-token output budget. With two long sources (~12K + ~13K chars combined) Gemini Flash sometimes exhausts the output budget on internal reasoning and returns empty text (`finishReason: "length"`, `text.length: 0`). This is reliable: every entity with two long sources hits the wall.
+
+**Fix:** trim each source to 6,000 chars before passing in. The first ~6K reliably covers the entity's chronology and most-cited facts; the model can synthesize the long-form prose from that without exhausting tokens.
+
+---
+
+## 2026-05-23 — Vercel Speed Insights + Analytics instead of self-hosted
+
+Free on the Hobby plan, no cookies (no GDPR banner), beacon-only (no perf cost). The cheaper "build telemetry into the app" alternative would require either an analytics DB tier on Neon or a third-party SaaS — neither worth the operational overhead at our traffic level.
+
+---
+
+## 2026-05-23 — Production observability surfaces
+
+- **Errors:** `app/error.tsx` for client-side; Vercel runtime logs for server-side. Structured pg error logger in `lib/db/retry.ts` unwraps DrizzleQueryError to surface the underlying SQLSTATE in Vercel's truncated log view.
+- **Speed:** Vercel Speed Insights (Core Web Vitals).
+- **Usage:** Vercel Analytics.
+- **DB health:** `/api/health` endpoint queries `SELECT 1` + entity count + most-recent fact-check timestamp.
+- **AI spend:** `pipeline_runs` table tracks every call; `pipeline/audit/coverage-report.ts` reads it.

@@ -1,28 +1,51 @@
 # Alexandria
 
-A living digital encyclopedia of human civilization — comprehensive, narrative, and visually navigable. Built locally, for one developer, with a continuously-running ingestion pipeline that grows the corpus daily.
+A living digital encyclopedia of human civilization — Wikipedia meets Google Earth meets a museum tour. Comprehensive across all eras and regions, with curated long-form prose at the top tier and structured Wikidata coverage at the base.
 
-> _Wikipedia meets Google Earth meets a museum tour, with the soul of Cosmos and the rigor of a graduate seminar._
+**Live:** [alexandria-chloei.vercel.app](https://alexandria-chloei.vercel.app)
 
-The project's working directory and Docker container/volume names retain the original "library-of-alexandria" naming for stability — they're infrastructure, not branding. Renaming the volume would destroy the Postgres data.
+> 347 entities at launch, 340 at Tier 2, 10 at Tier 3 (hand-curated). All Tier 2 entries are fact-checked against their sources; the flagged-claims surface is visible on every entry.
 
-## Local-only project
+## What it tries to do differently
 
-This repository **lives only on this laptop**. There is no GitHub remote and there never will be. Commits are local for history; the worktree is the canonical copy.
+Most encyclopedias of human history default to the West. Wikipedia is denser in English; English is densest on European subjects; the long tail of non-European history is underrepresented even when the underlying scholarship is rich.
 
-### Backup recommendation (your responsibility)
+Alexandria explicitly resists that default at every layer:
 
-Pick at least one of:
+- The seed filter rewards entries with sitelinks in **non-European Wikipedias** (Arabic, Chinese, Hindi, Swahili, Yoruba, etc.).
+- The homepage rotation never lets one civilization dominate (no region above 2× appearance).
+- Civilizational tags are **curated**, not imposed from a UN subregion map — Mongol Khanate and Islamic Caliphates aren't trapped inside a single modern country.
+- The calibration set the prose was tuned against runs from Hannibal to Mansa Musa to Wu Zetian to Tupac Amaru II to Murasaki Shikibu — not just the Greco-Roman canon.
 
-- **Time Machine** — set it up on an external SSD and let it run. Easiest. Covers everything.
-- **External drive snapshots** — periodically `rsync` the project directory to an external disk (`media-cache/` and `dumps/` can be excluded; they're regenerable).
-- **iCloud / Dropbox / OneDrive** — move the project under a synced folder. Be careful: large `dumps/` and `media-cache/` directories will hammer your bandwidth and quota; exclude them.
+The 10 Tier 3 anchors are the explicit answer to "what should an encyclopedia of human history look like if you don't start in Europe."
 
-Whatever you choose, **back up `drizzle/migrations/`, all source files, `DECISIONS.md`, and the Postgres data volume**. The Postgres volume is named `library-of-alexandria-pgdata` — back it up with `docker run --rm -v library-of-alexandria-pgdata:/data -v $(pwd):/backup alpine tar czf /backup/pgdata-backup.tar.gz /data` from time to time.
+## Architecture
 
-You do not need to back up `node_modules/`, `.next/`, `dumps/`, or `media-cache/` — they're regenerable.
+| Layer | Stack |
+|---|---|
+| **Frontend** | Next.js 16 (App Router), React 19, Tailwind v4 |
+| **Database** | Neon Postgres 17 + pgvector (HNSW index) |
+| **Search** | Hybrid FTS + pgvector embeddings via Reciprocal Rank Fusion |
+| **Embeddings** | Voyage 3 large, 1024-dim cosine, through Vercel AI Gateway |
+| **Generation** | Google Gemini 3.5 Flash through Vercel AI Gateway |
+| **Maps** | MapLibre GL 5 with 8 hand-authored historical empire overlays |
+| **Timeline** | Canvas + D3 scales + level-of-detail aggregation |
+| **Graph** | react-force-graph-2d (Canvas/WebGL) |
+| **Threads** | Curated editorial paths through 5-7 entities |
+| **Deployment** | Vercel (Hobby tier covers everything) |
+| **Observability** | Vercel Speed Insights + Analytics |
+| **Daily refresh** | Vercel Cron writes featured-rotation cache at 03:00 UTC |
 
-## Setup
+## The four quality tiers
+
+Every entity sits at one of four tiers. The pipeline upgrades entries based on inbound-link centrality and editorial attention.
+
+- **Tier 0** — Stub from the Wikidata dump (name, dates, type, coordinates, relationships). Stubs surface only through other entries; they never appear on the homepage or above the search fold.
+- **Tier 1** — 150-300 word summary, rewritten from Wikipedia's lead through `lib/ai/prompts/summarize.ts`.
+- **Tier 2** — 800-1500 word narrative, synthesized across Wikipedia and (where available) the 1911 Encyclopædia Britannica via `lib/ai/prompts/narrate.ts`. Fact-checked separately by `pipeline/workers/fact-check.ts`; flagged claims published with the entry.
+- **Tier 3** — Hand-picked imagery, longer-form prose (2,500-3,500 words), no algorithmic caps. The 10 anchors are: Hannibal, Mansa Musa, Wu Zetian, Hatshepsut, Songhai Empire, Saladin, Murasaki Shikibu, Akbar, Túpac Amaru II, Bronze Age Collapse.
+
+## Setup (local dev)
 
 ```bash
 # 1. Install dependencies
@@ -33,21 +56,43 @@ docker compose up -d postgres
 
 # 3. Create your local env file
 cp .env.example .env.local
-# Then fill in AI_GATEWAY_API_KEY in .env.local
-# (https://vercel.com/[team]/~/ai-gateway/api-keys)
+# Fill in AI_GATEWAY_API_KEY
+# Get one at https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%2Fapi-keys
 
-# 4. Generate and apply the initial schema
+# 4. Generate + apply schema
 pnpm db:generate
 pnpm db:migrate
 
-# 5. Run the dev server
-pnpm dev
+# 5. Seed a curated batch (no API spend; just structure)
+pnpm tsx scripts/seed-curated.ts
 
-# 6. In another terminal, run the pipeline
-pnpm pipeline
+# 6. Enrich the seed to Tier 1+ (uses AI Gateway; ~$0.40 for ~80 entities)
+pnpm tsx scripts/enrich-all.ts
+pnpm tsx scripts/narrate-all.ts
+
+# 7. Dev server
+pnpm dev
 ```
 
-The site is at `http://localhost:3000`. Drizzle Studio (ad-hoc DB browser) at `pnpm db:studio`.
+The site is at `http://localhost:3000`.
+
+Drizzle Studio (ad-hoc DB browser) at `pnpm db:studio`.
+
+## Production deploy
+
+Project is wired up to deploy to Vercel on push to `main`:
+
+1. Push commits to `github.com/chloeilabs/alexandria`
+2. Vercel auto-builds and ships
+3. Neon Postgres is the production DB; auto-connected via Vercel Postgres marketplace integration
+4. Vercel Cron triggers `/api/cron/refresh-featured` daily at 03:00 UTC
+
+Required env vars (set in Vercel project):
+
+- `DATABASE_URL` — Neon connection string
+- `AI_GATEWAY_API_KEY` — Vercel AI Gateway key
+- `CRON_SECRET` — random 64-hex string for cron route auth
+- `WIKIMEDIA_USER_AGENT` — optional, identifies us to Wikimedia APIs
 
 ## Scripts
 
@@ -55,41 +100,46 @@ The site is at `http://localhost:3000`. Drizzle Studio (ad-hoc DB browser) at `p
 |---|---|
 | `pnpm dev` | Next.js dev server |
 | `pnpm build` | Production build |
-| `pnpm typecheck` | TypeScript strict check across the project |
+| `pnpm typecheck` | TypeScript strict check |
 | `pnpm lint` | ESLint (Next.js flat config) |
-| `pnpm pipeline` | Boot the continuous ingestion + enrichment pipeline |
-| `pnpm pipeline:wikidata` | One-time Wikidata JSON dump streaming import |
-| `pnpm pipeline:wikipedia` | One-time Wikipedia XML dump streaming import |
-| `pnpm pipeline:tags` | Batch civilizational-tag assignment |
-| `pnpm pipeline:audit` | Coverage report (entities-per-region-per-era) |
-| `pnpm db:generate` | Generate a new Drizzle migration from schema changes |
+| `pnpm db:generate` | Generate a new Drizzle migration |
 | `pnpm db:migrate` | Apply pending migrations |
-| `pnpm db:push` | Push schema directly (dev convenience; skips migration files) |
-| `pnpm db:studio` | Open Drizzle Studio for ad-hoc DB browsing |
+| `pnpm db:studio` | Open Drizzle Studio |
+| `pnpm pipeline:wikidata` | Stream Wikidata JSON dump (use `--stdin` for curl-pipe) |
+| `pnpm pipeline:audit` | Coverage report (entities-per-region-per-era) |
+| `pnpm tsx scripts/seed-curated.ts` | Seed the initial ~60 entities |
+| `pnpm tsx scripts/seed-batch-{N}.ts` | Targeted seed batches |
+| `pnpm tsx scripts/enrich-all.ts` | Tier 0 → Tier 1 (summarise) |
+| `pnpm tsx scripts/narrate-all.ts` | Tier 1 → Tier 2 (narrate) |
+| `pnpm tsx scripts/narrate-britannica-rerun.ts` | Re-narrate with Britannica multi-source |
+| `pnpm tsx scripts/tier3-curate.ts` | Promote 5 anchors to Tier 3 |
+| `pnpm tsx scripts/tag-all.ts` | Civilizational tag assignment |
+| `pnpm tsx scripts/embed-all.ts` | Voyage 3 large embeddings → pgvector |
+| `pnpm tsx scripts/fetch-media.ts` | Pull hero imagery from Commons |
+| `pnpm tsx scripts/fact-check-all.ts` | Fact-check Tier 2 narratives |
+| `pnpm tsx scripts/fix-flagged-entities.ts` | Re-narrate the worst-flagged entries |
+| `pnpm tsx scripts/probe-britannica-coverage.ts` | Persist Britannica articles to `sources` |
+| `pnpm tsx scripts/rebuild-slugs.ts` | Promote unique-base slugs |
+| `pnpm tsx pipeline/audit/coverage-report.ts` | Regional / era / civilization audit |
 
-## Architecture
+## Budget discipline
 
-See `DECISIONS.md` for the locked architectural choices and the reasoning behind each. See `OPEN_QUESTIONS.md` for items that need editorial input.
+The pipeline never silently runs over budget. `pipeline/budget.ts` enforces a hard `DAILY_BUDGET_USD` cap (default 20):
 
-High level:
+1. Before each AI Gateway call, estimate cost via the model's pricing constants.
+2. Query today's cumulative spend from `pipeline_runs`.
+3. If `current + estimated > cap`, throw `BudgetExceeded` — the script logs and stops.
 
-- **Frontend**: Next.js 16 App Router, React 19, Tailwind v4, shadcn/ui (`new-york`), Motion v12
-- **Maps**: MapLibre GL 5 + `@openhistoricalmap/maplibre-gl-dates` for time-aware vector tiles
-- **Graph**: `react-force-graph-2d` (Canvas/WebGL — never renders the full corpus)
-- **Timeline**: Canvas-based with D3 scales + level-of-detail aggregation
-- **Database**: Postgres 17 with pgvector for embeddings, `pg-boss` for the job queue (same DB)
-- **AI**: Vercel AI Gateway routing to `google/gemini-3.5-flash` (1M-token context, $1.50/M input). Swap models in `lib/ai/index.ts`.
-- **Ingestion**: Streaming parsers for Wikidata JSON and Wikipedia XML bz2 dumps; matched by Wikidata QID
+Voyage embeddings cost ~$0.18 / million tokens; full corpus at 347 entities = $0.02. Gemini Flash for narration costs ~$1.50/M input + $9/M output; the full Tier 2 corpus was rewritten for under $5 total.
 
-## Quality tiers
+## Sources + licensing
 
-Every entity sits at one of four tiers. The pipeline upgrades entities continuously.
+- Wikipedia article text adapted under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Attribution on every entry.
+- 1911 Encyclopædia Britannica content is public domain in the United States; pulled via Wikisource.
+- Imagery from Wikimedia Commons, per-image attribution + license shown on each entry.
 
-- **Tier 0** — Stub from Wikidata dump (name, dates, type, coordinates, relationships)
-- **Tier 1** — Summary (150-300 words, Flash-rewritten Wikipedia lead)
-- **Tier 2** — Full narrative (800-1500 words, Flash-synthesized from Wikipedia + 1911 Britannica + other PD sources)
-- **Tier 3** — Editorially curated (Tier 2 + hand-picked imagery + custom map overlays + reviewed prose; swap to Gemini Pro or Claude here if needed)
+## Documentation
 
-## What this isn't (yet)
-
-Day-one is the corpus and the core navigation surfaces. Not day-one: user accounts, notebooks, audio narration, mobile-first UI, multi-language UI, personalized "guide" mode, primary-source linkouts, community curation. See the brief and `DECISIONS.md` for the deferral list.
+- [DECISIONS.md](./DECISIONS.md) — every meaningful architectural trade-off and the reasoning
+- [VERIFICATION.md](./VERIFICATION.md) — acceptance criteria + how each is verified
+- The [/about page](https://alexandria-chloei.vercel.app/about) — public-facing version, same content angled for readers

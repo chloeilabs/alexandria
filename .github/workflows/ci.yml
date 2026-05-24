@@ -1,0 +1,40 @@
+# CI: typecheck + lint on every PR and push to main.
+#
+# Doesn't run the dev server or the production build — Vercel does that
+# on every push, and that's the deploy gate. This workflow is the
+# fast-feedback layer: errors that would break the Vercel build, caught
+# at PR review time instead of after merge.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: TypeScript strict check
+        run: pnpm tsc --noEmit
+
+      - name: ESLint
+        run: pnpm lint
