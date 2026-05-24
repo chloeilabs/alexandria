@@ -76,8 +76,8 @@ function Prose({ paragraphs }: ProseProps) {
           key={i}
           className={
             i === 0
-              ? "text-lg leading-[1.85] text-foreground first-letter:font-display first-letter:font-normal first-letter:text-7xl first-letter:float-left first-letter:mr-3 first-letter:mt-2 first-letter:leading-[0.85] first-letter:text-accent"
-              : "text-lg leading-[1.85] text-foreground"
+              ? "text-base md:text-lg leading-[1.85] text-foreground first-letter:font-display first-letter:font-normal first-letter:text-6xl md:first-letter:text-7xl first-letter:float-left first-letter:mr-3 first-letter:mt-2 first-letter:leading-[0.85] first-letter:text-accent"
+              : "text-base md:text-lg leading-[1.85] text-foreground"
           }
         >
           {renderInline(p)}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Cormorant_Garamond, JetBrains_Mono } from "next/font/google";
 import { SiteNav } from "@/components/nav/SiteNav";
+import { SiteFooter } from "@/components/nav/SiteFooter";
 import "./globals.css";
 
 const inter = Inter({
@@ -28,6 +29,17 @@ export const metadata: Metadata = {
     "A living digital encyclopedia of human civilization — from the Indus Valley to the Songhai Empire to the present day.",
 };
 
+// Without this, mobile browsers render the page at a 980px default
+// viewport width and zoom out — text becomes unreadable on phones.
+// initialScale=1 + width=device-width is the standard mobile baseline.
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Don't disable user zoom — that's an accessibility regression.
+  // maximumScale = 5 is what iOS Safari treats as the practical cap.
+  maximumScale: 5,
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -38,9 +50,10 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${cormorant.variable} ${jetbrains.variable}`}
     >
-      <body className="antialiased">
+      <body className="antialiased flex flex-col min-h-screen">
         <SiteNav />
-        {children}
+        <div className="flex-1">{children}</div>
+        <SiteFooter />
       </body>
     </html>
   );
