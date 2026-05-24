@@ -15,6 +15,8 @@
 // Base: https://api.europeana.eu/record/v2/search.json
 // Docs: https://pro.europeana.eu/page/search
 
+import { nameMatchesHaystack } from "../media/relevance";
+
 const UA =
   process.env.WIKIMEDIA_USER_AGENT ??
   "Alexandria/0.1 (local development; contact: andrestran@icloud.com)";
@@ -85,6 +87,15 @@ function normalize(item: SearchItem): EuropeanaObject | null {
   };
 }
 
+/** Concatenate ALL multilingual title strings + provider for relevance
+ *  checking. Europeana titles are returned as an array of translations;
+ *  the first element ("CD" for one Mansa Musa false-positive) is not
+ *  always the most informative. */
+function europeanaHaystack(item: SearchItem, n: EuropeanaObject): string {
+  const titles = (item.title ?? []).filter(Boolean).join(" ");
+  return [titles, n.dataProvider, n.country].filter(Boolean).join(" ");
+}
+
 /**
  * Search Europeana for items matching `entityName`. Restricts to
  * `media=true` (item must have a renderable media asset) and
@@ -126,7 +137,15 @@ export async function searchItems(
   const normalized: EuropeanaObject[] = [];
   for (const item of items) {
     const n = normalize(item);
-    if (n) normalized.push(n);
+    if (!n) continue;
+    // Drop Europeana hits where the entity name doesn't actually
+    // appear in any title translation or provider — filters out
+    // botanical specimens (Musa → genus Musa) and unrelated
+    // catalog records.
+    if (!nameMatchesHaystack(entityName, europeanaHaystack(item, n))) {
+      continue;
+    }
+    normalized.push(n);
     if (normalized.length >= limit) break;
   }
   return normalized;
