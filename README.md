@@ -1,6 +1,6 @@
 # Alexandria
 
-A living digital encyclopedia of human civilization. Wikipedia meets Google Earth meets a museum tour. Comprehensive across all eras and regions, with curated long-form prose at the top tier and structured Wikidata coverage at the base.
+A living digital encyclopedia of human civilization.
 
 **Live:** [alexandria.chloei.ai](https://alexandria.chloei.ai)
 
