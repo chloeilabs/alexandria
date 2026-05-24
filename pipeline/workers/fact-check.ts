@@ -91,13 +91,20 @@ export async function factCheckEntity(qid: string): Promise<FactCheckResult> {
 
   // ai-sdk returns the parsed object via `experimental_output` when Output
   // schema is set; new ai 6.x exposes it via result.experimental_output.
-  // Defensively support both shapes.
+  // The getter THROWS NoOutputGeneratedError if the model returned no
+  // structured output (e.g. when narratives are very long and the model
+  // omits the JSON). Catch and fall back to text-JSON parse.
   type ResultWithOutput = typeof result & {
     experimental_output?: FactCheckOutput;
     output?: FactCheckOutput;
   };
   const r2 = result as ResultWithOutput;
-  const parsed: FactCheckOutput | undefined = r2.experimental_output ?? r2.output;
+  let parsed: FactCheckOutput | undefined;
+  try {
+    parsed = r2.experimental_output ?? r2.output;
+  } catch {
+    parsed = undefined;
+  }
 
   let findings: FactCheckOutput["findings"];
   if (parsed && Array.isArray(parsed.findings)) {
