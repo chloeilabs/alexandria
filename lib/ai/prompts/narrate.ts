@@ -48,6 +48,14 @@ function fmtDateRange(start: number | null, end: number | null): string {
   return end == null ? fmt(start) : `${fmt(start)}–${fmt(end)}`;
 }
 
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 function fmtSources(sources: NarrateSource[]): string {
   return sources
     .map((s, i) => {
@@ -61,7 +69,10 @@ function fmtSources(sources: NarrateSource[]): string {
               : s.kind === "internet_archive"
                 ? "Internet Archive, pre-1924 public domain"
                 : "Source";
-      const label = s.label ? `${baseLabel} — ${s.label}` : baseLabel;
+      // s.label is external metadata (IA creator strings can contain `,`
+      // and occasionally `&` / `"`) — escape before splicing into the XML
+      // attribute so a stray quote can't break prompt markup.
+      const label = escapeAttr(s.label ? `${baseLabel} — ${s.label}` : baseLabel);
       return `<source idx="${i + 1}" kind="${s.kind}" label="${label}">\n${s.content.trim()}\n</source>`;
     })
     .join("\n\n");

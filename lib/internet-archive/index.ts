@@ -179,12 +179,14 @@ function scoreCandidate(
   // Surname fallback for persons: only credit it when the FULL name also
   // appears somewhere (title + subtitle, often). Surname-only matches
   // are off — a single-token surname like "Musa" matches too many
-  // unrelated 19th-century pamphlets.
+  // unrelated 19th-century pamphlets. The exact-equals branch needs
+  // the same guard or it bypasses the rule (CodeRabbit catch on PR #6).
   if (hint === "person" && tokens.length >= 2) {
     const surname = tokens[tokens.length - 1]!;
     const surnameRe = wordBoundaryRe(surname);
-    if (titleLower === surname) score += 60;
-    else if (surnameRe.test(titleLower) && fullNamePresent) score += 15;
+    if (surnameRe.test(titleLower) && fullNamePresent) {
+      score += titleLower === surname ? 60 : 15;
+    }
   }
 
   // Downloads as a quality/relevance proxy — only credit when there's
