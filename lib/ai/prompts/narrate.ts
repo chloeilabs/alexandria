@@ -4,9 +4,11 @@
 import { MODEL_FLASH } from "../index";
 
 export interface NarrateSource {
-  kind: "wikipedia" | "britannica_1911" | "sep" | "other";
+  kind: "wikipedia" | "britannica_1911" | "sep" | "internet_archive" | "other";
   url?: string;
   content: string;
+  /** Optional metadata used to label the source block (e.g. "Dodge, 1896"). */
+  label?: string;
 }
 
 export interface NarrateInput {
@@ -46,17 +48,31 @@ function fmtDateRange(start: number | null, end: number | null): string {
   return end == null ? fmt(start) : `${fmt(start)}–${fmt(end)}`;
 }
 
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 function fmtSources(sources: NarrateSource[]): string {
   return sources
     .map((s, i) => {
-      const label =
+      const baseLabel =
         s.kind === "wikipedia"
           ? "Wikipedia (CC BY-SA)"
           : s.kind === "britannica_1911"
             ? "Encyclopædia Britannica, 1911 ed. (public domain)"
             : s.kind === "sep"
               ? "Stanford Encyclopedia of Philosophy (CC BY-NC-SA)"
-              : "Source";
+              : s.kind === "internet_archive"
+                ? "Internet Archive, pre-1924 public domain"
+                : "Source";
+      // s.label is external metadata (IA creator strings can contain `,`
+      // and occasionally `&` / `"`) — escape before splicing into the XML
+      // attribute so a stray quote can't break prompt markup.
+      const label = escapeAttr(s.label ? `${baseLabel} — ${s.label}` : baseLabel);
       return `<source idx="${i + 1}" kind="${s.kind}" label="${label}">\n${s.content.trim()}\n</source>`;
     })
     .join("\n\n");

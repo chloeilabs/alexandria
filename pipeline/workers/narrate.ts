@@ -30,10 +30,16 @@ import {
   fetchBritannica1911,
   type EntityHintType,
 } from "../../lib/wikisource";
+import { fetchInternetArchive } from "../../lib/internet-archive";
 import { checkBudget } from "../budget";
 
 const WIKIPEDIA_NARRATE_CHAR_BUDGET = 12_000;
 const BRITANNICA_NARRATE_CHAR_BUDGET = 9_000;
+const IA_NARRATE_CHAR_BUDGET = 8_000;
+
+// Opt-out: set DISABLE_IA_NARRATE_SOURCE=1 to skip the IA fetch and
+// reproduce pre-IA narrate behaviour (e.g. for A/B calibration runs).
+const IA_DISABLED = process.env.DISABLE_IA_NARRATE_SOURCE === "1";
 
 export interface NarrateResult {
   qid: string;
@@ -151,6 +157,56 @@ export async function narrateEntity(
     }
   }
 
+  // --- Internet Archive source (best-effort, pre-1924 PD English texts) ---
+  // Adds a third independent voice for entities the IA's English public-
+  // domain corpus covers (heavy on Greco-Roman, European, classical
+  // antiquity; honest miss for most non-Western post-Britannica subjects).
+  // Null returns are treated like a Britannica miss: just skip the source.
+  //
+  // The disable flag must gate BOTH the fresh fetch AND any cached row,
+  // otherwise once the probe persists IA rows the pre-IA calibration
+  // mode can't reproduce (CodeRabbit P1 catch on PR #6).
+  let iaText: string | null = null;
+  let iaUrl = "";
+  let iaLabel: string | undefined;
+  if (!IA_DISABLED) {
+    const storedIa = storedByKind.get("internet_archive");
+    if (storedIa?.content) {
+      iaText = storedIa.content;
+      iaUrl = storedIa.url ?? "";
+    } else {
+      try {
+        const hint = TYPE_HINT[entity.type];
+        const ia = await fetchInternetArchive(entity.name, hint);
+        if (ia) {
+          iaText = ia.text;
+          iaUrl = ia.url;
+          const creatorBit = ia.creator ? `${ia.creator}, ` : "";
+          const yearBit = ia.year ?? "";
+          iaLabel =
+            `${creatorBit}${yearBit}`.replace(/, $/, "") || undefined;
+          await db
+            .insert(sources)
+            .values({
+              entityQid: qid,
+              sourceKind: "internet_archive",
+              url: iaUrl,
+              content: iaText,
+              license: "Public domain",
+            })
+            .onConflictDoNothing({
+              target: [sources.entityQid, sources.sourceKind],
+            });
+        }
+      } catch (err) {
+        console.warn(
+          `[narrate] internet-archive fetch failed for ${qid}; falling back without IA source`,
+          err,
+        );
+      }
+    }
+  }
+
   // --- Build the narrate sources list ---
   const narrateSources: NarrateSource[] = [
     {
@@ -164,6 +220,14 @@ export async function narrateEntity(
       kind: "britannica_1911",
       url: britannicaUrl,
       content: britannicaText.slice(0, BRITANNICA_NARRATE_CHAR_BUDGET),
+    });
+  }
+  if (iaText) {
+    narrateSources.push({
+      kind: "internet_archive",
+      url: iaUrl,
+      content: iaText.slice(0, IA_NARRATE_CHAR_BUDGET),
+      label: iaLabel,
     });
   }
 
@@ -206,7 +270,9 @@ export async function narrateEntity(
           ? "CC BY-SA 4.0"
           : s.kind === "britannica_1911"
             ? "Public domain"
-            : "Unknown",
+            : s.kind === "internet_archive"
+              ? "Public domain"
+              : "Unknown",
     })),
   };
 
@@ -223,7 +289,7 @@ export async function narrateEntity(
       .where(eq(entities.qid, qid));
 
     await tx.insert(pipelineRuns).values({
-      jobKind: britannicaText ? "narrate-multi" : "narrate",
+      jobKind: narrateSources.length >= 2 ? "narrate-multi" : "narrate",
       startedAt: new Date(t0),
       finishedAt: new Date(),
       entitiesProcessed: 1,
