@@ -4,7 +4,7 @@ This file preserves the day-one acceptance snapshot after the second build push.
 
 ## Current production snapshot
 
-Checked via `https://alexandria-chloei.vercel.app/api/health` on 2026-05-24:
+Checked via `https://alexandria.chloei.ai/api/health` on 2026-05-24:
 
 ```
 376 entities

@@ -1,6 +1,6 @@
 # Alexandria — agent guide
 
-A living digital encyclopedia of human civilization. Tier 0 (Wikidata stub) → Tier 3 (hand-curated). Live at https://alexandria-chloei.vercel.app. Source of truth for project decisions is `DECISIONS.md`; for what's verified-working is `VERIFICATION.md`; for editorial questions and resolved-question breadcrumbs is `OPEN_QUESTIONS.md`. Read those first when you need history.
+A living digital encyclopedia of human civilization. Tier 0 (Wikidata stub) → Tier 3 (hand-curated). Live at https://alexandria.chloei.ai. Source of truth for project decisions is `DECISIONS.md`; for what's verified-working is `VERIFICATION.md`; for editorial questions and resolved-question breadcrumbs is `OPEN_QUESTIONS.md`. Read those first when you need history.
 
 ## Hard rules (non-negotiable)
 

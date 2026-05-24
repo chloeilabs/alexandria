@@ -133,7 +133,7 @@ The following are explicitly deferred. Each is mentioned in the brief's roadmap 
 
 ## 2026-05-23 — Switched to GitHub remote + Vercel production deployment
 
-The original brief was "local only. No GitHub remote. Ever." Overridden after explicit user request. The repo is now public at github.com/chloeilabs/alexandria; the site is live at alexandria-chloei.vercel.app on the Vercel Hobby tier.
+The original brief was "local only. No GitHub remote. Ever." Overridden after explicit user request. The repo is now public at github.com/chloeilabs/alexandria; the site is live at alexandria.chloei.ai on the Vercel Hobby tier.
 
 **What changed:**
 - Production DB is now Neon (Vercel marketplace integration), not local Docker Postgres.

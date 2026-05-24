@@ -2,7 +2,7 @@
 
 A living digital encyclopedia of human civilization — Wikipedia meets Google Earth meets a museum tour. Comprehensive across all eras and regions, with curated long-form prose at the top tier and structured Wikidata coverage at the base.
 
-**Live:** [alexandria-chloei.vercel.app](https://alexandria-chloei.vercel.app)
+**Live:** [alexandria.chloei.ai](https://alexandria.chloei.ai)
 
 > Production health check (2026-05-24): 376 entities, 359 at Tier 2, 10 at Tier 3 (hand-curated), with 368 fact-check reviews tracked.
 
@@ -149,4 +149,4 @@ Voyage embeddings cost ~$0.18 / million tokens; the current 376-entity curated c
 
 - [DECISIONS.md](./DECISIONS.md) — every meaningful architectural trade-off and the reasoning
 - [VERIFICATION.md](./VERIFICATION.md) — historical day-one acceptance snapshot plus current verification commands
-- The [/about page](https://alexandria-chloei.vercel.app/about) — public-facing version, same content angled for readers
+- The [/about page](https://alexandria.chloei.ai/about) — public-facing version, same content angled for readers
