@@ -17,7 +17,12 @@
 // Base: https://collectionapi.metmuseum.org/public/collection/v1
 // Docs: https://metmuseum.github.io/
 
-import { nameMatchesHaystack } from "../media/relevance";
+import {
+  dateWindowAccepts,
+  isNaturalScienceSource,
+  looksLikeTaxonomicSpecimen,
+  nameMatchesHaystack,
+} from "../media/relevance";
 
 const UA =
   process.env.WIKIMEDIA_USER_AGENT ??
@@ -85,6 +90,9 @@ function normalize(r: MetObjectResponse): MetObject | null {
 export interface SearchOptions {
   /** Max objects to return after filtering (default 3). */
   limit?: number;
+  /** Entity date range for the date-window filter. */
+  entityDateStart?: number | null;
+  entityDateEnd?: number | null;
 }
 
 /** Concatenate the Met-object fields that carry usable relevance signal. */
@@ -141,5 +149,14 @@ export async function searchByName(
   return objects
     .filter((o): o is MetObject => o !== null)
     .filter((o) => nameMatchesHaystack(entityName, relevanceHaystack(o)))
+    // Same layered filters as Smithsonian / Europeana — Met's
+    // department field carries natural-history signal ("Egyptian Art"
+    // passes; the natural-science museums Met partners with would
+    // fail). objectDate is the Met's free-text date for the artifact.
+    .filter((o) => !looksLikeTaxonomicSpecimen(o.title))
+    .filter((o) => !isNaturalScienceSource(o.department))
+    .filter((o) =>
+      dateWindowAccepts(opts.entityDateStart, opts.entityDateEnd, o.objectDate),
+    )
     .slice(0, limit);
 }

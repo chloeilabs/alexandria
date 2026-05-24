@@ -13,7 +13,12 @@
 // Base: https://api.si.edu/openaccess/api/v1.0
 // Docs: https://edan.si.edu/openaccess/apidocs/
 
-import { nameMatchesHaystack } from "../media/relevance";
+import {
+  dateWindowAccepts,
+  isNaturalScienceSource,
+  looksLikeTaxonomicSpecimen,
+  nameMatchesHaystack,
+} from "../media/relevance";
 
 const UA =
   process.env.WIKIMEDIA_USER_AGENT ??
@@ -43,6 +48,10 @@ export interface SmithsonianObject {
 export interface SearchOptions {
   /** Max objects to return (default 3). */
   limit?: number;
+  /** Entity date range for the date-window filter. Pass when known —
+   *  rejects e.g. 1850s Hannibal Hamlin for the Carthaginian general. */
+  entityDateStart?: number | null;
+  entityDateEnd?: number | null;
 }
 
 interface SearchHit {
@@ -162,13 +171,16 @@ export async function searchObjects(
   for (const row of rows) {
     const n = normalize(row);
     if (!n) continue;
-    // Apply the shared name-relevance check before keeping the row.
-    // The Smithsonian search will happily return Hibiscus and Eryngium
-    // botanical specimens for "Akbar" (matched via collector / Latin
-    // genus); the validator drops them while keeping Mughal tomb
-    // engravings whose title actually contains "Akbar".
     const haystack = [n.title, n.unit, n.topics].filter(Boolean).join(" ");
+    // Layered filters: each catches a distinct false-positive pattern.
     if (!nameMatchesHaystack(entityName, haystack)) continue;
+    if (looksLikeTaxonomicSpecimen(n.title)) continue;
+    if (isNaturalScienceSource(n.unit)) continue;
+    if (
+      !dateWindowAccepts(opts.entityDateStart, opts.entityDateEnd, n.date)
+    ) {
+      continue;
+    }
     normalized.push(n);
     if (normalized.length >= limit) break;
   }
