@@ -93,7 +93,7 @@ export async function narrateEntity(
     wikipediaText = storedWp.content;
     wikipediaUrl = storedWp.url ?? "";
   } else {
-    const article = await fetchPlaintext(entity.name);
+    const article = await fetchPlaintext(entity.name, { qid: entity.qid });
     if (article && article.extract.length >= 400) {
       wikipediaText = article.extract;
       wikipediaUrl = article.url;

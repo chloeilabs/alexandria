@@ -42,7 +42,7 @@ export async function summarizeEntity(qid: string): Promise<SummarizeResult> {
     return { qid, status: "already_done" };
   }
 
-  const article = await fetchPlaintext(entity.name);
+  const article = await fetchPlaintext(entity.name, { qid: entity.qid });
   if (!article || article.extract.length < 200) {
     return { qid, status: "no_source" };
   }

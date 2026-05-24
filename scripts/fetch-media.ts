@@ -61,7 +61,7 @@ async function main(): Promise<void> {
       `  ${row.qid.padEnd(10)} ${row.name.slice(0, 36).padEnd(36)} `,
     );
     try {
-      const summary = await fetchSummary(row.name);
+      const summary = await fetchSummary(row.name, { qid: row.qid });
       if (!summary?.originalUrl) {
         none += 1;
         console.log("—  no image");

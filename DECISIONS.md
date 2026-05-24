@@ -232,3 +232,17 @@ The first pragmatic attempt — match by entity name + alias — produced system
 **Fix:** restrict the lookup map to entity names that are **unique** in the corpus (one entity per lowercased name); drop aliases entirely. This gives 225,385 lookups out of 233,500 entities (96.2% coverage) with vastly fewer false positives. Names of entities still mis-classified in our bulk DB (Albert Einstein as type='place') aren't fixed by this — that's an upstream extractor issue.
 
 **Reconsider when:** the bulk Wikidata ingest is re-run with `sitelinks.enwiki.title` captured into the entities table. That would let the matcher use a clean 1:1 join and recover the ~3.8% recall lost here.
+
+---
+
+## 2026-05-24 — Wikipedia title resolution: sitelink fallback after diacritic-strip
+
+The enrichment + fetch-media pipeline historically passed `entity.name` (the Wikidata English label) directly to Wikipedia's REST + Action APIs. That label is canonical for Wikidata, but it sometimes drifts from the Wikipedia article title: a typo in the label ("TutanKhamun"), a non-English label that survived extraction ("Olmecas" — Spanish), a label using a less-common transliteration ("Nzingha Mbande" vs. Wikipedia's "Nzinga of Ndongo and Matamba"), or a label that's been superseded ("Kingdom of Baluba" → "Luba Empire"). The diacritic-strip fallback added earlier handles "Sunjata Keïta" → "Sundiata Keita" cases but nothing structural.
+
+**Fix:** `lib/wikipedia/index.ts:fetchSummary` and `fetchPlaintext` now accept an optional `{ qid }`. After the literal + diacritic-stripped lookups both miss, they hit `https://www.wikidata.org/wiki/Special:EntityData/{qid}.json` and retry with the `sitelinks.enwiki.title`. Per-session in-memory cache so a repair script doesn't double-fetch. Call sites updated: `summarize.ts`, `narrate.ts`, `fetch-media.ts`.
+
+**Backfill:** `scripts/repair-wikipedia-titles.ts` — finds entities stuck at Tier 0 (no Wikipedia source) or without media, resolves their sitelinks, retries enrichment with the QID hint. `--rename` updates the entity name to the sitelink title when it differs and has no `" ("` (avoids disambiguators like "Tupaia (navigator)" leaking into display names).
+
+**Run results (May 24):** Of 26 stuck candidates, 5 entities promoted from Tier 0 → Tier 1 (TutanKhamun, Olmecas, Fatimid Caliphate, Luba Empire, Nzinga of Ndongo and Matamba). 7 entities gained their first hero image. 13 slugs rebuilt to match the new canonical names. The remaining ~11 stuck entities either resolve to titles with parens that the REST endpoint dislikes (Tupaia (navigator), Imjin War — turned out to be unrelated), or have Wikipedia articles without a hero image (Hinduism, Jainism, Hephthalites).
+
+**Open issue surfaced:** the `media_commons_url_unique` constraint means an image can attach to only one entity. Two pairs of historically-related entities (Kingdom of Lunda + Kingdom of Baluba, and Mahajanapada + a sibling Indus polity) share their lead Commons file. The second insert silently no-ops; the entity stays without media unless someone manually picks a different image.
