@@ -16,6 +16,7 @@ import {
 import { renderInline } from "@/lib/markdown";
 import { labelFor } from "@/lib/wikidata/predicates";
 import { ERAS } from "@/lib/search";
+import { ArchiveGallery } from "@/components/entity/ArchiveGallery";
 
 /** Map a date_start year to its era id. Returns null for undated. */
 function eraIdFor(year: number | null | undefined): string | null {
@@ -234,37 +235,14 @@ export function EntityPage({ data }: { data: EntityPageData }) {
       )}
 
       {/* Tier 3 gallery — additional hand-picked imagery beyond the hero.
-          Only rendered when tier=3 and there's more than one image. */}
+          Click any image to zoom into a lightbox. Only rendered when
+          tier=3 and there's more than one image. */}
       {entity.tier >= 3 && media.length > 1 && (
         <section className="max-w-4xl mx-auto px-6 pt-16">
           <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-8 border-t border-border pt-8">
             From the archives
           </h2>
-          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-12">
-            {media.slice(1).map((m, idx) => (
-              <li key={`${m.url}-${idx}`}>
-                <figure>
-                  <div className="relative w-full aspect-[4/3] overflow-hidden bg-card border border-border/40">
-                    <Image
-                      src={m.url}
-                      alt={m.caption ?? ""}
-                      fill
-                      sizes="(max-width: 768px) 100vw, 500px"
-                      className="object-cover"
-                    />
-                  </div>
-                  {m.caption && (
-                    <figcaption className="mt-3 font-display italic text-base leading-snug text-muted-foreground">
-                      {m.caption}
-                    </figcaption>
-                  )}
-                  <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/60">
-                    {m.attribution}
-                  </div>
-                </figure>
-              </li>
-            ))}
-          </ul>
+          <ArchiveGallery images={media.slice(1)} />
         </section>
       )}
 
