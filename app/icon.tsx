@@ -1,5 +1,5 @@
-// Dynamic favicon — gilt "L" on deep ink. The dark+gold pairing reads
-// at favicon size and matches the site's design language.
+// Dynamic favicon: the header logo's italic display treatment,
+// reduced to a single high-contrast mark for browser-tab size.
 
 import { ImageResponse } from "next/og";
 
@@ -18,15 +18,17 @@ export default function Icon() {
           justifyContent: "center",
           background: "#0d1320",
           color: "#d6b066",
-          fontFamily: "Georgia, serif",
-          fontSize: 26,
-          fontWeight: 300,
-          letterSpacing: -1,
+          fontFamily: "Cormorant Garamond, Georgia, 'Times New Roman', serif",
+          fontSize: 29,
+          fontStyle: "italic",
+          fontWeight: 400,
+          lineHeight: 1,
+          letterSpacing: 0,
         }}
       >
-        L
+        A
       </div>
     ),
-    size,
+    { ...size },
   );
 }
