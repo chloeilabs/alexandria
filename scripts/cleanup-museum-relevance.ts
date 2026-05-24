@@ -25,6 +25,17 @@ import {
   nameMatchesHaystack,
 } from "../lib/media/relevance";
 
+// Note: the BCE-country-heritage check (lib/media/relevance.ts
+// bceCountryHeritageAccepts) is intentionally NOT applied here. The
+// cleanup script only has the persisted caption + attribution to work
+// from; the original Europeana `country` field isn't preserved as a
+// separate column. Captions look like "title · year · provider ·
+// country" but year and country are often missing, so the trailing
+// token isn't reliably the country. The live filter in
+// lib/europeana/index.ts enforces the heritage rule for new fetches;
+// retroactive cleanup of older Europeana rows on BCE entities needs
+// a targeted DELETE by known-bad caption signature.
+
 async function main(): Promise<void> {
   const apply = process.argv.includes("--apply");
 

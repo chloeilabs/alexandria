@@ -16,6 +16,7 @@
 // Docs: https://pro.europeana.eu/page/search
 
 import {
+  bceCountryHeritageAccepts,
   dateWindowAccepts,
   isNaturalScienceSource,
   looksLikeTaxonomicSpecimen,
@@ -162,6 +163,14 @@ export async function searchItems(
     if (allTitles.some(looksLikeTaxonomicSpecimen)) continue;
     if (isNaturalScienceSource(n.dataProvider)) continue;
     if (!dateWindowAccepts(opts.entityDateStart, opts.entityDateEnd, n.year)) {
+      continue;
+    }
+    // BCE entities: when the candidate has no parseable date, require
+    // a Mediterranean-heritage country. Catches "Hannibal af Aarøsund"
+    // (Denmark lighthouse) and similar no-year same-name collisions.
+    if (
+      !bceCountryHeritageAccepts(opts.entityDateEnd, n.year, n.country)
+    ) {
       continue;
     }
     normalized.push(n);
