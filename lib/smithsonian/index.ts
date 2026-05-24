@@ -13,6 +13,8 @@
 // Base: https://api.si.edu/openaccess/api/v1.0
 // Docs: https://edan.si.edu/openaccess/apidocs/
 
+import { nameMatchesHaystack } from "../media/relevance";
+
 const UA =
   process.env.WIKIMEDIA_USER_AGENT ??
   "Alexandria/0.1 (local development; contact: andrestran@icloud.com)";
@@ -159,7 +161,15 @@ export async function searchObjects(
   const normalized: SmithsonianObject[] = [];
   for (const row of rows) {
     const n = normalize(row);
-    if (n) normalized.push(n);
+    if (!n) continue;
+    // Apply the shared name-relevance check before keeping the row.
+    // The Smithsonian search will happily return Hibiscus and Eryngium
+    // botanical specimens for "Akbar" (matched via collector / Latin
+    // genus); the validator drops them while keeping Mughal tomb
+    // engravings whose title actually contains "Akbar".
+    const haystack = [n.title, n.unit, n.topics].filter(Boolean).join(" ");
+    if (!nameMatchesHaystack(entityName, haystack)) continue;
+    normalized.push(n);
     if (normalized.length >= limit) break;
   }
   return normalized;

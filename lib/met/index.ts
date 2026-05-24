@@ -17,6 +17,8 @@
 // Base: https://collectionapi.metmuseum.org/public/collection/v1
 // Docs: https://metmuseum.github.io/
 
+import { nameMatchesHaystack } from "../media/relevance";
+
 const UA =
   process.env.WIKIMEDIA_USER_AGENT ??
   "Alexandria/0.1 (local development; contact: andrestran@icloud.com)";
@@ -85,36 +87,11 @@ export interface SearchOptions {
   limit?: number;
 }
 
-/**
- * Returns true if the entity name (or its surname when multi-token) is
- * a substring of any object metadata field that signals relevance. Used
- * to filter out the Met's no-match placeholder set without dropping
- * real matches.
- */
-function isRelevant(obj: MetObject, entityName: string): boolean {
-  const tokens = entityName.toLowerCase().split(/\s+/).filter((t) => t.length >= 3);
-  if (tokens.length === 0) return false;
-  const haystack = [
-    obj.title,
-    obj.artist,
-    obj.culture,
-    obj.medium,
-    obj.department,
-  ]
+/** Concatenate the Met-object fields that carry usable relevance signal. */
+function relevanceHaystack(obj: MetObject): string {
+  return [obj.title, obj.artist, obj.culture, obj.medium, obj.department]
     .filter((s): s is string => !!s)
-    .join(" ")
-    .toLowerCase();
-  // Multi-token names: require the full name to appear, OR the last
-  // distinctive token (surname for persons, second word for places like
-  // "Songhai Empire" → "songhai"). Surname-only is acceptable here
-  // because we're matching against title/artist/culture, not generic
-  // catalogue text — false positives on "musa" are far less common in
-  // titles than in book corpora.
-  if (haystack.includes(entityName.toLowerCase())) return true;
-  if (tokens.length >= 2) {
-    return tokens.some((t) => haystack.includes(t));
-  }
-  return haystack.includes(tokens[0]!);
+    .join(" ");
 }
 
 /**
@@ -163,6 +140,6 @@ export async function searchByName(
 
   return objects
     .filter((o): o is MetObject => o !== null)
-    .filter((o) => isRelevant(o, entityName))
+    .filter((o) => nameMatchesHaystack(entityName, relevanceHaystack(o)))
     .slice(0, limit);
 }
