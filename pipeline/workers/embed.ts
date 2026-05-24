@@ -1,4 +1,4 @@
-// Generate a 1024-dim cosine embedding per entity via Voyage 3 large (over
+// Generate a 1024-dim cosine embedding per entity via Voyage 4 large (over
 // AI Gateway). Idempotent: if the entity already has an embedding and its
 // content hasn't changed since the embedding was written, returns
 // "already_done".
@@ -139,7 +139,7 @@ export interface EmbedBatchSummary {
 }
 
 /**
- * Batch-embed many entities in chunks of 128 (Voyage 3 large max per
+ * Batch-embed many entities in chunks of 128 (Voyage 4 series max per
  * `embedMany` call). 100× fewer round-trips than per-qid `embedEntity()`,
  * same per-token cost. Used by `scripts/embed-all.ts` for first-pass
  * bulk embed; the per-qid worker stays in place for queue-driven re-embed.

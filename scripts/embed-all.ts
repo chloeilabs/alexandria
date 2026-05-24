@@ -2,7 +2,7 @@
 /**
  * Embed every entity that doesn't yet have a vector.
  *
- * Sequential. Each call hits AI Gateway's Voyage 3 large endpoint. Honors
+ * Sequential. Each call hits AI Gateway's Voyage 4 large endpoint. Honors
  * DAILY_BUDGET_USD via the budget guard inside embedEntity.
  *
  * Usage:

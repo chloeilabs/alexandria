@@ -6,7 +6,7 @@
 // model string ("google/gemini-3.5-flash") just works.
 //
 // Update PRICING when re-baselining; current values fetched from
-// https://ai-gateway.vercel.sh/v1/models (2026-05-22).
+// https://ai-gateway.vercel.sh/v1/models (2026-05-24).
 
 import "../env";
 
@@ -66,14 +66,21 @@ export function chooseModel(
 // Embeddings
 // ---------------------------------------------------------------------------
 //
-// Voyage 3 large: 1024-dimensional cosine-friendly embeddings. Exact match
-// for our `entities.embedding vector(1024)` column. $0.18 per million tokens
-// (no separate output cost — embedding endpoints are flat-rate).
+// Voyage 4 large: newer-generation 1024-default cosine-friendly embeddings.
+// Drop-in for `entities.embedding vector(1024)` — no schema change. $0.12
+// per million tokens through the Vercel AI Gateway (vs $0.18 for the
+// retired voyage-3-large), and "all embeddings created with the 4 series
+// are compatible with each other" (per gateway model card), so a future
+// step down to voyage-4 ($0.06/M) or voyage-4-lite ($0.02/M) for cost
+// discipline is a one-string change. Note: Voyage's account-level 200M
+// free-tier allowance is NOT exposed through the gateway — it's
+// pay-as-you-go from token one here. Re-embed cost for ~376 entities
+// is ~$0.02 regardless.
 
-export const MODEL_EMBED = "voyage/voyage-3-large";
+export const MODEL_EMBED = "voyage/voyage-4-large";
 export const EMBED_DIMENSIONS = 1024;
 /** USD per million tokens for the embedding model. */
-export const EMBED_PRICE_PER_M = 0.18;
+export const EMBED_PRICE_PER_M = 0.12;
 
 export function estimateEmbedCostUsd(tokens: number): number {
   return (tokens / 1_000_000) * EMBED_PRICE_PER_M;
