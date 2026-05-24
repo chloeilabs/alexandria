@@ -31,13 +31,45 @@ export async function generateMetadata({
   };
 }
 
+const BASE_URL = "https://alexandria-chloei.vercel.app";
+
 export default async function ThreadRoute({ params }: PageProps) {
   const { slug } = await params;
   const data = await getThreadBySlug(slug);
   if (!data) notFound();
 
+  // schema.org Article + ItemList JSON-LD. Threads are curated reading
+  // paths so the structure reads naturally as "an article that contains
+  // an ordered list of N entity pages".
+  const ldJson = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: data.title,
+    description: data.blurb ?? data.intro?.slice(0, 200) ?? "",
+    url: `${BASE_URL}/thread/${slug}`,
+    inLanguage: "en",
+    author: { "@type": "Organization", name: "Alexandria", url: BASE_URL },
+    publisher: { "@type": "Organization", name: "Alexandria", url: BASE_URL },
+    isAccessibleForFree: true,
+    mainEntity: {
+      "@type": "ItemList",
+      name: data.title,
+      numberOfItems: data.entries.length,
+      itemListElement: data.entries.map((e, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        url: `${BASE_URL}/entity/${e.slug}`,
+        name: e.name,
+      })),
+    },
+  };
+
   return (
     <article className="min-h-screen pb-32">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(ldJson) }}
+      />
       <header className="max-w-3xl mx-auto px-6 pt-20 pb-12">
         <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-6">
           Thread  ·  {data.entries.length} entries

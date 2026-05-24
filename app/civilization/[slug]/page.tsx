@@ -47,6 +47,8 @@ export async function generateMetadata({
   };
 }
 
+const BASE_URL = "https://alexandria-chloei.vercel.app";
+
 export default async function CivilizationRoute({ params }: PageProps) {
   const { slug } = await params;
   const data = await getCivilizationBySlug(slug);
@@ -57,6 +59,30 @@ export default async function CivilizationRoute({ params }: PageProps) {
     data.minYear != null && data.maxYear != null
       ? `${fmtYear(data.minYear)} – ${fmtYear(data.maxYear)}`
       : null;
+
+  // schema.org CollectionPage JSON-LD — a structured "this is a curated
+  // listing of N entities sharing a tag" signal for search engines + LLMs.
+  const ldJson = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: label,
+    description:
+      `${data.entryCount} entries from ${label}` +
+      (span ? `, spanning ${span}.` : "."),
+    url: `${BASE_URL}/civilization/${slug}`,
+    inLanguage: "en",
+    isPartOf: { "@type": "WebSite", name: "Alexandria", url: BASE_URL },
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: data.entries.length,
+      itemListElement: data.entries.slice(0, 100).map((e, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        url: `${BASE_URL}/entity/${e.slug}`,
+        name: e.name,
+      })),
+    },
+  };
 
   // Group entries by century-ish era so the long page has visible rhythm.
   const buckets: { label: string; min: number; max: number }[] = [
@@ -78,6 +104,10 @@ export default async function CivilizationRoute({ params }: PageProps) {
 
   return (
     <main className="min-h-screen pb-32">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(ldJson) }}
+      />
       <header className="max-w-3xl mx-auto px-6 pt-20 pb-12">
         <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-6">
           Civilization

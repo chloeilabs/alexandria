@@ -50,6 +50,20 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${cormorant.variable} ${jetbrains.variable}`}
     >
+      <head>
+        {/* Preconnect to Wikimedia origins — every entity page that has
+            hero imagery hits upload.wikimedia.org for the next/image
+            optimization fetch (or proxies through the Next.js loader).
+            The preconnect cuts ~100-200ms off the first hero load by
+            getting the DNS lookup + TLS handshake in flight before the
+            image request needs to be made. */}
+        <link
+          rel="preconnect"
+          href="https://upload.wikimedia.org"
+          crossOrigin="anonymous"
+        />
+        <link rel="dns-prefetch" href="https://upload.wikimedia.org" />
+      </head>
       <body className="antialiased flex flex-col min-h-screen">
         <SiteNav />
         <div className="flex-1">{children}</div>

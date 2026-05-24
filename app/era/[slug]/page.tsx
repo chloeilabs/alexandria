@@ -58,6 +58,8 @@ function groupByCivilization(
     });
 }
 
+const BASE_URL = "https://alexandria-chloei.vercel.app";
+
 export default async function EraRoute({ params }: PageProps) {
   const { slug } = await params;
   const data = await getEraBySlug(slug);
@@ -70,8 +72,33 @@ export default async function EraRoute({ params }: PageProps) {
   const prevEra = eraIndex > 0 ? ERAS[eraIndex - 1] : null;
   const nextEra = eraIndex < ERAS.length - 1 ? ERAS[eraIndex + 1] : null;
 
+  // schema.org CollectionPage JSON-LD.
+  const ldJson = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: `The ${data.label} era`,
+    description: `${data.entryCount} entries from the ${data.label.toLowerCase()} era of the Library — ${fmtYear(data.min)} to ${fmtYear(data.max)}.`,
+    url: `${BASE_URL}/era/${slug}`,
+    inLanguage: "en",
+    isPartOf: { "@type": "WebSite", name: "Alexandria", url: BASE_URL },
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: data.entries.length,
+      itemListElement: data.entries.slice(0, 100).map((e, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        url: `${BASE_URL}/entity/${e.slug}`,
+        name: e.name,
+      })),
+    },
+  };
+
   return (
     <main className="min-h-screen pb-32">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(ldJson) }}
+      />
       <header className="max-w-3xl mx-auto px-6 pt-20 pb-12">
         <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-6">
           Era
