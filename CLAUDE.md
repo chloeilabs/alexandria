@@ -6,7 +6,7 @@ A living digital encyclopedia of human civilization. Tier 0 (Wikidata stub) → 
 
 - **Anti-Western-bias is a hard requirement** at every layer — seed filter, homepage rotation, civilizational tags, calibration set. If you're adding content, querying, or ranking, ask whether the change would skew the corpus back toward the West. The audit at `pipeline/audit/coverage-report.ts` is the diagnostic.
 - **Never commit secrets.** `.env`, `.env.local`, `.env*.local`, `.env.prod`, `.env.production`, `.env.production.local` are all gitignored — keep it that way. GitHub push protection has caught one near-miss already. `AI_GATEWAY_API_KEY`, `DATABASE_URL`, `CRON_SECRET` are the sensitive ones.
-- **Daily AI budget cap: $20.** Enforced by `pipeline/budget.ts:checkBudget()` before every Gateway call. If a script throws `BudgetExceeded`, that's the safety net working — don't bypass it.
+- **AI budget cap is enforced.** `pipeline/budget.ts:checkBudget()` runs three windows — monthly, daily, hourly — before every Gateway call. Defaults: `$600/mo` → `$20/day` → `$2/hr`, overridable per env var (production is currently `MONTHLY_BUDGET_USD=100` → `$3.33/day` → `$0.33/hr`). If a script throws `BudgetExceeded`, that's the safety net working — don't bypass it.
 - **`CRON_SECRET` must have no trailing whitespace.** Vercel rejects env values with trailing whitespace at build time. When adding via shell, use `printf "%s"` not `echo`.
 
 ## Stack
@@ -15,22 +15,44 @@ A living digital encyclopedia of human civilization. Tier 0 (Wikidata stub) → 
 |---|---|
 | Framework | Next.js 16 App Router · React 19 · TypeScript strict · Tailwind v4 |
 | DB | Postgres 17 + pgvector (HNSW), Drizzle ORM (postgres-js client) |
-| AI | Vercel AI Gateway → `google/gemini-3.5-flash` (`MODEL_FLASH`); Voyage 3 large for embeddings (1024-dim) |
+| AI | Vercel AI Gateway → `google/gemini-3.5-flash` (`MODEL_FLASH`); Voyage 4 large for embeddings (1024-dim) |
 | Search | Hybrid FTS + pgvector via Reciprocal Rank Fusion (k=60) |
 | Maps | MapLibre GL 5, hand-authored historical empire overlays |
 | Deploy | Vercel (Hobby tier covers everything); Neon Postgres (Vercel marketplace integration) |
 
 Node 24, pnpm 10.
 
+### External APIs (curated 9-provider scope)
+
+Audio is explicitly out of scope (no ElevenLabs / TTS — see `~/.claude/projects/.../memory/feedback_alexandria_no_audio.md`). Met Museum + Smithsonian Open Access were trialled and deprecated 2026-05-24 due to recall + same-name disambiguation issues. The active 9:
+
+| Tier | Provider | Role |
+|---|---|---|
+| Essential | Wikidata | Entity universe, structured facts, multilingual aliases |
+| Essential | Wikipedia (REST + Action) | Base prose for every Tier 1 entity |
+| Essential | Wikimedia Commons | Default imagery |
+| Essential | Vercel AI Gateway (Gemini Flash + Voyage 4 large) | Synthesis + embeddings |
+| Essential | Internet Archive / Open Library | Tier 2 third narrate source (`lib/internet-archive/`) |
+| Essential | OpenAlex | Fact-check corroboration (`lib/openalex/`) |
+| Recommended | World Historical Gazetteer (Index API, no token) | Non-Western place name variants → `entity_aliases` |
+| Recommended | Wikisource (1911 Britannica) | Tier 2 second source (`lib/wikisource/`) |
+| Recommended | Europeana (key required) | Museum / manuscript imagery beyond Commons (`lib/europeana/`) |
+
+The integrations plan with full per-track reasoning lives at `~/.claude/plans/create-a-plan-what-rustling-sutherland.md`.
+
 ## Repo layout
 
 ```
 app/              Next.js routes (entity, civilization, era, thread, search, about, api/*)
 components/       React components, grouped by surface (entity/, nav/, search/, map/)
-lib/              db/ (schema + queries + retry), ai/ (prompts + gateway), wikipedia/, format/
+lib/              db/ (schema + queries + retry), ai/ (prompts + gateway), wikipedia/, wikisource/,
+                  internet-archive/, openalex/, europeana/, whg/, media/relevance.ts, format.ts
 pipeline/         budget.ts, workers/ (summarize, narrate, fact-check), bulk/ (Wikidata + Wikipedia stream parsers), audit/
-scripts/          one-shot CLI runners: seed-batch-N, enrich-all, narrate-all, tag-all, embed-all, fetch-media, fact-check-all, fix-flagged-entities, smoke-test, tier3/, repair-wikipedia-titles
-drizzle/          generated migrations (0000–0005)
+scripts/          one-shot CLI runners: enrich-all, narrate-all, tag-all, embed-all, fetch-media,
+                  fact-check-all, fetch-museum-media (Europeana), enrich-whg, probe-ia-coverage,
+                  backfill-fact-check-corroboration, cleanup-museum-relevance, smoke-* (per-client),
+                  fix-flagged-entities, tier3/, repair-wikipedia-titles
+drizzle/migrations/ generated migrations (0000–0007)
 docker-compose.yml  local Postgres + pgvector on port 5434
 ```
 
@@ -67,7 +89,7 @@ Without loading `.env.prod` or explicitly exporting `DATABASE_URL`, scripts hit 
 
 - **Tier 0** — Wikidata stub: name, dates, type, coords, relationships. Surface only through inbound links; never on the homepage or above search fold.
 - **Tier 1** — 150-300 word summary from Wikipedia lead via `lib/ai/prompts/summarize.ts`.
-- **Tier 2** — 800-1500 word narrative from Wikipedia + (where available) 1911 Britannica via `lib/ai/prompts/narrate.ts`. Fact-checked separately by `pipeline/workers/fact-check.ts`; flagged claims published with the entry.
+- **Tier 2** — 800-1500 word narrative from Wikipedia + (where available) 1911 Britannica + (where available) a pre-1924 Internet Archive English public-domain text via `lib/ai/prompts/narrate.ts`. Fact-checked separately by `pipeline/workers/fact-check.ts`; each flagged claim is enriched with OpenAlex peer-reviewed corroboration (signal: strong/partial/weak + top works) so editorial can deprioritise false positives. Published with the entry.
 - **Tier 3** — Hand-picked imagery, 2,500-3,500 word prose, no algorithmic caps. The 10 anchors: Hannibal, Mansa Musa, Wu Zetian, Hatshepsut, Songhai Empire, Saladin, Murasaki Shikibu, Akbar, Tupac Amaru II, Bronze Age Collapse. Mansa Musa is also hand-edited (the editorial benchmark).
 
 Tier 3 hand-edits use scholarly sources beyond what the auto-checker sees, so fact-check rows for hand-edited Tier 3 are deliberately not maintained — delete the row if you re-fact-check by accident.
@@ -77,16 +99,27 @@ Tier 3 hand-edits use scholarly sources beyond what the auto-checker sees, so fa
 Run order, all from project root:
 
 ```bash
-pnpm tsx scripts/enrich-all.ts        # Tier 0 → 1   (Wikipedia REST)
-pnpm tsx scripts/narrate-all.ts       # Tier 1 → 2   (multi-source narrate)
-pnpm tsx scripts/tag-all.ts           # civilization + era tagging
-pnpm tsx scripts/embed-all.ts         # Voyage 3 large → pgvector
-pnpm tsx scripts/fetch-media.ts       # Commons hero image
-pnpm tsx scripts/fact-check-all.ts    # ground claims against sources
-pnpm tsx scripts/rebuild-slugs.ts     # promote unique slugs (foo-q123 → foo)
+pnpm tsx scripts/enrich-all.ts                       # Tier 0 → 1   (Wikipedia REST)
+pnpm tsx scripts/narrate-all.ts                      # Tier 1 → 2   (Wikipedia + Britannica + IA)
+pnpm tsx scripts/tag-all.ts                          # civilization + era tagging
+pnpm tsx scripts/embed-all.ts                        # Voyage 4 large → pgvector (1024-dim)
+pnpm tsx scripts/fetch-media.ts                      # Commons hero image
+pnpm tsx scripts/fetch-museum-media.ts               # Europeana additions (lands in Tier 3 ArchiveGallery)
+pnpm tsx scripts/enrich-whg.ts                       # WHG non-Western place name variants → entity_aliases
+pnpm tsx scripts/fact-check-all.ts                   # ground claims against sources + OpenAlex corroboration
+pnpm tsx scripts/rebuild-slugs.ts                    # promote unique slugs (foo-q123 → foo)
 ```
 
-`enrich-all` and `narrate-all` cost ~$0.005 and ~$0.02 per entity. Always remember the `DATABASE_URL=…` prefix when targeting Neon.
+`enrich-all` and `narrate-all` cost ~$0.005 and ~$0.02 per entity. The newer scripts are free (Europeana / WHG / IA are no-cost APIs; OpenAlex is $1/day free tier, plenty for current scale). Always remember `set -a; source .env.prod; set +a` before targeting Neon.
+
+Op-only scripts (run on demand, not part of the standard chain):
+
+```bash
+pnpm tsx scripts/probe-ia-coverage.ts                # persist IA source rows for all Tier 2+ entities
+pnpm tsx scripts/backfill-fact-check-corroboration.ts   # retroactively enrich existing reviews
+pnpm tsx scripts/cleanup-museum-relevance.ts         # re-apply relevance filters to existing rows
+pnpm tsx scripts/smoke-{europeana,openalex,whg,ia}-client.ts   # DB-free per-client regression
+```
 
 ## Pre-commit / pre-push checks
 
