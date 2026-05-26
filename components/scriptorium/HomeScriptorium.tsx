@@ -102,7 +102,10 @@ function Frontispiece({ stats }: { stats: ScriptoriumStats }) {
         sive Anthologia Civilizationum Humanarum
       </div>
 
-      <div className="mx-auto" style={{ margin: "32px auto 26px", width: 420 }}>
+      <div
+        className="mx-auto w-full max-w-[420px]"
+        style={{ margin: "32px auto 26px" }}
+      >
         <div style={{ height: 1, background: "var(--color-rule)", marginBottom: 4 }} />
         <div style={{ height: 3, background: "var(--color-accent)", marginBottom: 4 }} />
         <div style={{ height: 1, background: "var(--color-rule)" }} />

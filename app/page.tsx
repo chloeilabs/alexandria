@@ -23,12 +23,19 @@ export default async function Home() {
 
   const erasWithEntries = eraCounts.filter((e) => e.entryCount > 0).length;
 
+  // getAllThreads orders featured threads first, so without filtering
+  // out the editor's lead pick the closing ViaeLectionis section ends
+  // up suggesting the same thread the reader just saw in fol. i.v.
+  const closingThreads = threads
+    .filter((t) => t.slug !== featuredThread?.slug)
+    .slice(0, 3);
+
   return (
     <HomeScriptorium
       featured={featured}
       stats={stats}
       civs={civs}
-      threads={threads.slice(0, 3)}
+      threads={closingThreads}
       featuredThread={featuredThread}
       erasWithEntries={erasWithEntries}
     />

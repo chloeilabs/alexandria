@@ -58,6 +58,7 @@ export function ThemeToggle() {
       type="button"
       onClick={toggle}
       aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+      aria-pressed={theme === "dark"}
       className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground hover:text-accent transition-colors focus:outline-none focus-visible:underline focus-visible:underline-offset-4 inline-flex items-center gap-1.5"
       suppressHydrationWarning
     >

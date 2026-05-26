@@ -98,7 +98,10 @@ export async function searchByText(
   if (!trimmed) return [];
 
   // websearch_to_tsquery supports quoted phrases, OR, leading "-" for
-  // negation. ts_headline wraps matches in <mark>...</mark> for the UI.
+  // negation. ts_headline wraps matches in our private-use Unicode
+  // sentinels ( / ) rather than literal <mark> tags so we
+  // can safely HTML-escape the full snippet at consumption time and
+  // re-insert the <mark> wrappers without trusting any source HTML.
   const rows = await withRetry("searchByText", () =>
     db.execute<RawHit>(sql`
       SELECT
@@ -116,7 +119,7 @@ export async function searchByText(
           'english',
           COALESCE(summary, name),
           q,
-          'StartSel=<mark>, StopSel=</mark>, MaxWords=28, MinWords=12, ShortWord=3, MaxFragments=2, FragmentDelimiter=" … "'
+          'StartSel=, StopSel=, MaxWords=28, MinWords=12, ShortWord=3, MaxFragments=2, FragmentDelimiter=" … "'
         ) AS snippet,
         ts_rank(search_text, q) + (tier * 0.05) AS rank
       FROM entities, websearch_to_tsquery('english', ${trimmed}) q
@@ -139,10 +142,32 @@ export async function searchByText(
     dateEnd: r.date_end,
     dateEndPrecision: r.date_end_precision,
     summary: r.summary,
-    snippet: r.snippet,
+    snippet: sanitizeSnippet(r.snippet),
     rank: r.rank,
     source: "fts",
   }));
+}
+
+// Snippet sanitiser: ts_headline runs over raw `entities.summary`
+// (model output, never HTML-escaped at write time), so its result can
+// contain arbitrary `<` / `>` characters that would otherwise render
+// as HTML in the search results page (`dangerouslySetInnerHTML`).
+// We escape everything, then swap our private-use match sentinels for
+// real <mark> tags — that guarantees the only tags in the final HTML
+// are the ones we put there.
+const MARK_START_RE = //g;
+const MARK_END_RE = //g;
+
+function sanitizeSnippet(snippet: string | null): string | null {
+  if (!snippet) return snippet;
+  return snippet
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(MARK_START_RE, "<mark>")
+    .replace(MARK_END_RE, "</mark>");
 }
 
 /**
