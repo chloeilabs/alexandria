@@ -67,13 +67,17 @@ type DisplayProps = {
 };
 
 function responsiveFontSize(size: number): string {
-  // Floor: half the requested size, but never below 28px.
-  const min = Math.max(28, Math.round(size * 0.5));
+  // Floor: half the requested size, with a 28px readability floor —
+  // but capped at the requested size itself, so a Display passed
+  // `size={22}` doesn't produce `clamp(28px, …, 22px)` (which would
+  // force the text larger than the caller asked for, since CSS clamp
+  // resolves min > max to the min value).
+  const floor = Math.min(size, Math.max(28, Math.round(size * 0.5)));
   // Scale roughly proportional to viewport width — 1vw per ~14px of
   // size, derived empirically so 64px lands near 4.5vw and 140px
   // near 10vw. Cap at the requested size on wide screens.
   const vw = (size / 14).toFixed(2);
-  return `clamp(${min}px, ${vw}vw, ${size}px)`;
+  return `clamp(${floor}px, ${vw}vw, ${size}px)`;
 }
 
 export function Display({
