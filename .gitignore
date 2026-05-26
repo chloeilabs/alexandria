@@ -43,7 +43,9 @@ dumps/
 .drizzle/cache/
 
 # Local-only IDE settings
-.claude/
+.claude/*
+!.claude/hooks/
+!.claude/settings.json
 .vercel
 
 # Calibration / bake-off output (regenerable from scripts)
