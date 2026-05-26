@@ -1,9 +1,8 @@
 // Civilization landing page: every entity tagged with the given civ slug,
 // organized chronologically, with adjacent civilizations to hop sideways.
-//
-// Hits Postgres at request time (force-dynamic) — Vercel's static prerender
-// can't reach Neon reliably during build, same reason the other DB-backed
-// pages declare dynamic.
+// Rendered SCRIPTORIUM-style: centred editorial header, era group
+// markers, and entity cards consistent with the thread / era detail
+// templates.
 
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -15,6 +14,12 @@ import {
   getAllCivilizationSlugs,
 } from "@/lib/db/queries/civilization";
 import { fmtYear, regionLabel, firstSentence } from "@/lib/format";
+import {
+  EditorialPageHeader,
+  MonoLabel,
+  Display,
+} from "@/components/scriptorium/primitives";
+import { PlaceholderPlate, toneFor } from "@/components/scriptorium/PlaceholderPlate";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -39,11 +44,7 @@ export async function generateMetadata({
   return {
     title: `${label} · Alexandria`,
     description,
-    openGraph: {
-      title: label,
-      description,
-      type: "website",
-    },
+    openGraph: { title: label, description, type: "website" },
   };
 }
 
@@ -60,8 +61,6 @@ export default async function CivilizationRoute({ params }: PageProps) {
       ? `${fmtYear(data.minYear)} – ${fmtYear(data.maxYear)}`
       : null;
 
-  // schema.org CollectionPage JSON-LD — a structured "this is a curated
-  // listing of N entities sharing a tag" signal for search engines + LLMs.
   const ldJson = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
@@ -84,7 +83,6 @@ export default async function CivilizationRoute({ params }: PageProps) {
     },
   };
 
-  // Group entries by century-ish era so the long page has visible rhythm.
   const buckets: { label: string; min: number; max: number }[] = [
     { label: "Ancient", min: -10_000, max: -1000 },
     { label: "Classical", min: -1000, max: 500 },
@@ -97,43 +95,73 @@ export default async function CivilizationRoute({ params }: PageProps) {
     .map((b) => ({
       ...b,
       entries: data.entries.filter(
-        (e) => e.dateStart != null && e.dateStart >= b.min && e.dateStart < b.max,
+        (e) =>
+          e.dateStart != null && e.dateStart >= b.min && e.dateStart < b.max,
       ),
     }))
     .filter((b) => b.entries.length > 0);
 
+  const meta =
+    `${data.entryCount} ${data.entryCount === 1 ? "entry" : "entries"}` +
+    (span ? `  ·  ${span}` : "");
+
   return (
-    <main className="min-h-screen pb-32">
+    <main className="min-h-screen pb-32 codex-paper">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(ldJson) }}
       />
-      <header className="max-w-3xl mx-auto px-6 pt-20 pb-12">
-        <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-6">
-          Civilization
-          {span ? `  ·  ${span}` : ""}
-          {`  ·  ${data.entryCount} ${data.entryCount === 1 ? "entry" : "entries"}`}
-        </div>
-        <h1 className="font-display font-light text-5xl md:text-7xl leading-[1.02] tracking-tight text-foreground">
-          {label}
-        </h1>
-      </header>
+
+      <div className="max-w-4xl mx-auto px-6 pt-20 pb-12">
+        <EditorialPageHeader
+          kicker="Capitulum civilizationis"
+          title={label}
+          titleSize={84}
+          meta={meta}
+          blurb={`A chapter of the volume, organised chronologically — every entry the Library currently holds for ${label}, with adjacent civilisations to wander into at the foot of the page.`}
+        />
+      </div>
 
       <div className="max-w-3xl mx-auto px-6 space-y-20">
         {grouped.map((bucket) => (
           <section key={bucket.label}>
-            <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-8 border-t border-border pt-8">
-              {bucket.label}
-            </h2>
+            <div
+              className="flex items-baseline justify-between mb-8 pb-2 border-b"
+              style={{ borderColor: "var(--color-accent)" }}
+            >
+              <span
+                className="font-display italic uppercase"
+                style={{
+                  fontSize: 18,
+                  letterSpacing: "0.18em",
+                  color: "var(--color-accent)",
+                }}
+              >
+                ¶ {bucket.label}
+              </span>
+              <MonoLabel size={10} track="0.18em" tone="muted">
+                {bucket.entries.length}{" "}
+                {bucket.entries.length === 1 ? "entry" : "entries"}
+              </MonoLabel>
+            </div>
             <ul className="space-y-10">
               {bucket.entries.map((e) => (
                 <li key={e.qid}>
                   <Link
                     href={`/entity/${e.slug}`}
-                    className="group flex gap-6 items-start focus:outline-none focus-visible:outline-1 focus-visible:outline-accent focus-visible:outline-offset-4"
+                    className="group flex gap-6 items-start no-underline focus:outline-none focus-visible:outline-1 focus-visible:outline-accent focus-visible:outline-offset-4"
+                    prefetch={false}
                   >
-                    {e.heroUrl && (
-                      <div className="relative w-24 h-24 shrink-0 overflow-hidden bg-card border border-border/40">
+                    <div
+                      className="relative shrink-0 overflow-hidden"
+                      style={{
+                        width: 96,
+                        height: 96,
+                        background: "var(--color-background-elevated)",
+                        border: "1px solid var(--color-border)",
+                      }}
+                    >
+                      {e.heroUrl ? (
                         <Image
                           src={e.heroUrl}
                           alt=""
@@ -141,22 +169,43 @@ export default async function CivilizationRoute({ params }: PageProps) {
                           sizes="96px"
                           className="object-cover"
                         />
-                      </div>
-                    )}
+                      ) : (
+                        <PlaceholderPlate
+                          slug={e.slug}
+                          tone={toneFor(label)}
+                          tier={e.tier}
+                          height={96}
+                          showCaption={false}
+                        />
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-3 flex-wrap mb-1">
-                        <h3 className="font-display text-2xl text-foreground group-hover:text-accent transition-colors">
+                        <Display
+                          size={26}
+                          weight={400}
+                          as="h3"
+                          className="group-hover:text-accent transition-colors"
+                          style={{ letterSpacing: "-0.012em", lineHeight: 1 }}
+                        >
                           {e.name}
-                        </h3>
-                        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        </Display>
+                        <MonoLabel size={10} track="0.18em" tone="muted">
                           {e.type}
                           {e.dateStart != null
                             ? `  ·  ${fmtYear(e.dateStart, e.dateStartPrecision)}`
                             : ""}
-                        </span>
+                        </MonoLabel>
                       </div>
                       {e.summary && (
-                        <p className="text-base leading-relaxed text-muted-foreground">
+                        <p
+                          className="font-display"
+                          style={{
+                            fontSize: 16,
+                            lineHeight: 1.6,
+                            color: "var(--color-muted-foreground)",
+                          }}
+                        >
                           {firstSentence(e.summary, 220)}
                         </p>
                       )}
@@ -170,22 +219,45 @@ export default async function CivilizationRoute({ params }: PageProps) {
 
         {undated.length > 0 && (
           <section>
-            <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-8 border-t border-border pt-8">
-              Without dates
-            </h2>
+            <div
+              className="flex items-baseline justify-between mb-8 pb-2 border-b"
+              style={{ borderColor: "var(--color-accent)" }}
+            >
+              <span
+                className="font-display italic uppercase"
+                style={{
+                  fontSize: 18,
+                  letterSpacing: "0.18em",
+                  color: "var(--color-accent)",
+                }}
+              >
+                ¶ Without dates
+              </span>
+              <MonoLabel size={10} track="0.18em" tone="muted">
+                {undated.length}{" "}
+                {undated.length === 1 ? "entry" : "entries"}
+              </MonoLabel>
+            </div>
             <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
               {undated.map((e) => (
                 <li key={e.qid}>
                   <Link
                     href={`/entity/${e.slug}`}
                     className="group flex items-baseline gap-3 flex-wrap focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
+                    prefetch={false}
                   >
-                    <span className="font-display text-lg text-foreground group-hover:text-accent transition-colors">
+                    <span
+                      className="font-display group-hover:text-accent transition-colors"
+                      style={{
+                        fontSize: 18,
+                        color: "var(--color-foreground)",
+                      }}
+                    >
                       {e.name}
                     </span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    <MonoLabel size={10} track="0.16em" tone="muted">
                       {e.type}
-                    </span>
+                    </MonoLabel>
                   </Link>
                 </li>
               ))}
@@ -195,36 +267,71 @@ export default async function CivilizationRoute({ params }: PageProps) {
 
         {data.adjacent.length > 0 && (
           <section>
-            <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-8 border-t border-border pt-8">
-              Threads through
-            </h2>
+            <div
+              className="flex items-baseline justify-between mb-8 pb-2 border-b"
+              style={{ borderColor: "var(--color-accent)" }}
+            >
+              <span
+                className="font-display italic uppercase"
+                style={{
+                  fontSize: 18,
+                  letterSpacing: "0.18em",
+                  color: "var(--color-accent)",
+                }}
+              >
+                ¶ Threads sideways
+              </span>
+              <MonoLabel size={10} track="0.18em" tone="muted">
+                {data.adjacent.length}{" "}
+                {data.adjacent.length === 1
+                  ? "civilization"
+                  : "civilizations"}
+              </MonoLabel>
+            </div>
             <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
               {data.adjacent.map((a) => (
                 <li key={a.slug}>
                   <Link
                     href={`/civilization/${a.slug}`}
-                    className="group flex items-baseline gap-3 flex-wrap focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
+                    className="group flex items-baseline justify-between gap-3 flex-wrap focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
+                    prefetch={false}
                   >
-                    <span className="font-display text-lg text-foreground group-hover:text-accent transition-colors">
+                    <span
+                      className="font-display group-hover:text-accent transition-colors"
+                      style={{
+                        fontSize: 18,
+                        color: "var(--color-foreground)",
+                      }}
+                    >
                       {regionLabel(a.slug)}
                     </span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      {a.overlap} shared{a.overlap === 1 ? " entry" : " entries"}
-                    </span>
+                    <MonoLabel size={10} track="0.18em">
+                      {a.overlap} shared
+                    </MonoLabel>
                   </Link>
                 </li>
               ))}
             </ul>
           </section>
         )}
+
+        <div
+          className="pt-8 mt-12"
+          style={{ borderTop: "1px solid var(--color-border)" }}
+        >
+          <Link
+            href="/civilization"
+            className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent hover:text-foreground transition-colors focus:outline-none focus-visible:underline focus-visible:underline-offset-4"
+          >
+            ← all civilizations
+          </Link>
+        </div>
       </div>
     </main>
   );
 }
 
 export async function generateStaticParams() {
-  // Although the page is force-dynamic, providing params keeps the slug
-  // index handy for any future static-export path; harmless to include.
   const civs = await getAllCivilizationSlugs();
   return civs.map((c) => ({ slug: c.slug }));
 }

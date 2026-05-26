@@ -1,29 +1,63 @@
 @import "tailwindcss";
 
+/* Dark mode opt-in via a `.dark` class on <html>. Driven by the theme
+   toggle in SiteNav and the no-flash script in app/layout.tsx. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  /* Surfaces — deep ink/charcoal with subtle warm undertone */
-  --color-background: oklch(0.18 0.01 250);
+  /* ── CODEX palette (light, default) ──────────────────────────────
+     Vellum paper, deep brown ink, gold-leaf and vermilion accents.
+     Mirrors the SCRIPTORIUM/CODEX theme from the handoff. */
+  --color-background: oklch(0.93 0.024 80);
+  --color-background-elevated: oklch(0.89 0.026 80);
+  --color-foreground: oklch(0.22 0.035 50);
+  --color-muted: oklch(0.89 0.026 80);
+  --color-muted-foreground: oklch(0.42 0.034 55);
+  --color-border: oklch(0.70 0.030 70);
+  --color-border-faint: oklch(0.83 0.026 75);
+  /* Editorial rules (folio dividers, double-rule strips). Stronger
+     than --color-border so the section breaks still read as deliberate
+     ruled lines, but well shy of --color-foreground — using the text
+     colour for dividers reads as distracting "lines everywhere". */
+  --color-rule: oklch(0.55 0.030 60);
+  --color-card: oklch(0.89 0.026 80);
+  --color-card-foreground: oklch(0.22 0.035 50);
+
+  /* Accents — vermilion (primary), gold (secondary), ink-blue */
+  --color-accent: oklch(0.45 0.18 25);
+  --color-accent-foreground: oklch(0.93 0.024 80);
+  --color-gold: oklch(0.62 0.13 80);
+  --color-ink-blue: oklch(0.40 0.14 245);
+  --color-warn: oklch(0.55 0.18 40);
+
+  /* Type families — wired via Next.js font system in layout.tsx.
+     EB Garamond is the SCRIPTORIUM display face; Cormorant kept as
+     a graceful fallback. */
+  --font-display: var(--font-eb-garamond), "EB Garamond", var(--font-cormorant), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
+}
+
+/* ── Dark mode override (editorial-dark — see entityDark in the
+   handoff). Deep ink-blue surfaces, warm bone foreground, amber-gold
+   accent. */
+.dark {
+  --color-background: oklch(0.18 0.010 250);
+  --color-background-elevated: oklch(0.21 0.009 250);
   --color-foreground: oklch(0.96 0.005 80);
-
-  /* Accent — warm gold (Met Museum / period gilt) */
-  --color-accent: oklch(0.78 0.13 80);
-  --color-accent-foreground: oklch(0.18 0.01 250);
-
-  /* Muted — for secondary text and surfaces */
-  --color-muted: oklch(0.24 0.008 250);
+  --color-muted: oklch(0.21 0.009 250);
   --color-muted-foreground: oklch(0.72 0.012 80);
-
-  /* Borders — barely visible, intentionally restrained */
-  --color-border: oklch(0.28 0.006 250);
-
-  /* Card / panel surface, slightly elevated from background */
+  --color-border: oklch(0.31 0.006 250);
+  --color-border-faint: oklch(0.24 0.005 250);
+  --color-rule: oklch(0.45 0.012 250);
   --color-card: oklch(0.21 0.009 250);
   --color-card-foreground: oklch(0.96 0.005 80);
 
-  /* Type families — wired via Next.js font system in layout.tsx */
-  --font-display: var(--font-cormorant), Georgia, "Times New Roman", serif;
-  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
-  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
+  --color-accent: oklch(0.78 0.13 80);
+  --color-accent-foreground: oklch(0.18 0.010 250);
+  --color-gold: oklch(0.82 0.16 75);
+  --color-ink-blue: oklch(0.65 0.15 235);
+  --color-warn: oklch(0.65 0.22 35);
 }
 
 @layer base {
@@ -33,6 +67,10 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Theme transitions: slow enough to feel intentional, fast enough
+       not to drag. Limit to the properties that actually change so we
+       don't transition layout shifts. */
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 
   body {
@@ -40,10 +78,9 @@
     color: var(--color-foreground);
   }
 
-  /* Aggressive whitespace by default — the brief calls for it */
   ::selection {
-    background: var(--color-accent);
-    color: var(--color-accent-foreground);
+    background: color-mix(in oklch, var(--color-accent) 35%, transparent);
+    color: var(--color-foreground);
   }
 
   /* Search result snippet highlighting (ts_headline emits <mark>) */
@@ -51,5 +88,79 @@
     background: transparent;
     color: var(--color-accent);
     font-style: italic;
+  }
+}
+
+/* ── SCRIPTORIUM utilities ──────────────────────────────────────────
+   Subtle paper grain on the body of the codex pages. Two-axis
+   repeating gradient mimics the laid-paper texture of a printed
+   leaf without an image asset. Dark mode is calmer (the deep
+   surface already reads as material). */
+.codex-paper {
+  background-image:
+    repeating-linear-gradient(
+      2deg,
+      transparent 0 3px,
+      color-mix(in oklch, var(--color-foreground) 2%, transparent) 3px 3.6px
+    ),
+    repeating-linear-gradient(
+      92deg,
+      transparent 0 11px,
+      color-mix(in oklch, var(--color-foreground) 1.6%, transparent) 11px 11.4px
+    );
+}
+
+.dark .codex-paper {
+  background-image:
+    repeating-linear-gradient(
+      2deg,
+      transparent 0 3px,
+      color-mix(in oklch, var(--color-foreground) 1%, transparent) 3px 3.6px
+    );
+}
+
+/* Drop-cap initial. Used by the SCRIPTORIUM editor's preface and
+   long-form reading bodies. */
+.drop-cap::first-letter {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 5.25rem;
+  line-height: 0.84;
+  color: var(--color-accent);
+  float: left;
+  padding-right: 0.4rem;
+  padding-top: 0.4rem;
+  margin-bottom: -0.4rem;
+}
+
+/* ── Multi-column responsive helpers ───────────────────────────────
+   Selected-reading body is two columns at reading-width, single
+   column when the artboard collapses below a tablet. */
+.reading-columns {
+  column-count: 1;
+}
+@media (min-width: 768px) {
+  .reading-columns {
+    column-count: 2;
+    column-gap: 36px;
+    column-rule: 1px solid var(--color-border);
+  }
+}
+
+/* Index of civilizations: 1 col on phone, 2 on tablet, 3 on desktop. */
+.civ-index-columns {
+  column-count: 1;
+  column-gap: 32px;
+}
+@media (min-width: 640px) {
+  .civ-index-columns {
+    column-count: 2;
+    column-gap: 40px;
+  }
+}
+@media (min-width: 1024px) {
+  .civ-index-columns {
+    column-count: 3;
+    column-gap: 52px;
   }
 }

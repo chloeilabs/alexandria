@@ -1,7 +1,7 @@
 // Thread detail: a linear walk through 5-10 entities, each preceded by
-// the editorial bridge note that frames its place in the story. Each entry
-// is a card with hero thumb + name + dates + the bridge note + first-
-// sentence summary.
+// the editorial bridge note that frames its place in the story. Rendered
+// SCRIPTORIUM-style: centred editorial header, numbered `Caput` markers
+// before each entry, and a hairline-rule between stops.
 
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -10,6 +10,12 @@ import Image from "next/image";
 
 import { getThreadBySlug } from "@/lib/db/queries/thread";
 import { fmtYear, firstSentence } from "@/lib/format";
+import {
+  EditorialPageHeader,
+  MonoLabel,
+  Display,
+} from "@/components/scriptorium/primitives";
+import { PlaceholderPlate, toneFor } from "@/components/scriptorium/PlaceholderPlate";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -23,7 +29,8 @@ export async function generateMetadata({
   const { slug } = await params;
   const data = await getThreadBySlug(slug);
   if (!data) return { title: "Not found" };
-  const description = data.blurb ?? `A path of ${data.entries.length} entries.`;
+  const description =
+    data.blurb ?? `A path of ${data.entries.length} entries.`;
   return {
     title: `${data.title} · Alexandria`,
     description,
@@ -33,14 +40,16 @@ export async function generateMetadata({
 
 const BASE_URL = "https://alexandria.chloei.ai";
 
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+function romanNumeral(n: number): string {
+  return ROMAN[n - 1] ?? String(n);
+}
+
 export default async function ThreadRoute({ params }: PageProps) {
   const { slug } = await params;
   const data = await getThreadBySlug(slug);
   if (!data) notFound();
 
-  // schema.org Article + ItemList JSON-LD. Threads are curated reading
-  // paths so the structure reads naturally as "an article that contains
-  // an ordered list of N entity pages".
   const ldJson = {
     "@context": "https://schema.org",
     "@type": "Article",
@@ -65,52 +74,91 @@ export default async function ThreadRoute({ params }: PageProps) {
   };
 
   return (
-    <article className="min-h-screen pb-32">
+    <article className="min-h-screen pb-32 codex-paper">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(ldJson) }}
       />
-      <header className="max-w-3xl mx-auto px-6 pt-20 pb-12">
-        <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-6">
-          Thread  ·  {data.entries.length} entries
-        </div>
-        <h1 className="font-display font-light text-5xl md:text-7xl leading-[1.02] tracking-tight text-foreground">
-          {data.title}
-        </h1>
-        {data.blurb && (
-          <p className="mt-6 font-display italic text-xl leading-relaxed text-muted-foreground border-l-2 border-accent/40 pl-5">
-            {data.blurb}
-          </p>
-        )}
+
+      <div className="max-w-4xl mx-auto px-6 pt-20 pb-12">
+        <EditorialPageHeader
+          kicker="Itinerarium lectoris"
+          title={data.title}
+          titleSize={72}
+          blurb={data.blurb}
+          meta={`${data.entries.length} ${data.entries.length === 1 ? "stop" : "stops"}${data.featured ? "  ·  featured" : ""}`}
+        />
         {data.intro && (
-          <p className="mt-8 text-lg leading-[1.85] text-foreground">
+          <p
+            className="font-display mx-auto mt-10"
+            style={{
+              fontSize: 19,
+              lineHeight: 1.65,
+              color: "var(--color-foreground)",
+              maxWidth: 720,
+              textAlign: "justify",
+              hyphens: "auto",
+            }}
+          >
             {data.intro}
           </p>
         )}
-      </header>
+      </div>
 
-      <ol className="max-w-3xl mx-auto px-6 space-y-16 mt-8">
+      <ol className="max-w-3xl mx-auto px-6 space-y-16 mt-4">
         {data.entries.map((e, idx) => (
           <li key={e.qid} className="relative">
-            <div className="flex items-baseline gap-4 mb-6">
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent">
-                {String(idx + 1).padStart(2, "0")}
+            <div
+              className="flex items-baseline gap-4 mb-6"
+              aria-hidden="true"
+            >
+              <span
+                className="font-display italic"
+                style={{
+                  fontSize: 13,
+                  letterSpacing: "0.18em",
+                  color: "var(--color-accent)",
+                  textTransform: "uppercase",
+                }}
+              >
+                Caput {romanNumeral(idx + 1)}
               </span>
-              <span className="flex-1 h-px bg-border" />
+              <span
+                className="flex-1 h-px"
+                style={{ background: "var(--color-foreground)" }}
+              />
             </div>
 
             {e.note && (
-              <p className="font-display italic text-lg leading-relaxed text-muted-foreground mb-6 border-l-2 border-accent/40 pl-5">
+              <p
+                className="font-display italic mb-6"
+                style={{
+                  fontSize: 18,
+                  lineHeight: 1.6,
+                  color: "var(--color-muted-foreground)",
+                  borderLeft: "2px solid var(--color-accent)",
+                  paddingLeft: 20,
+                }}
+              >
                 {e.note}
               </p>
             )}
 
             <Link
               href={`/entity/${e.slug}`}
-              className="group flex gap-6 items-start focus:outline-none focus-visible:outline-1 focus-visible:outline-accent focus-visible:outline-offset-4"
+              className="group flex gap-6 items-start no-underline focus:outline-none focus-visible:outline-1 focus-visible:outline-accent focus-visible:outline-offset-4"
+              prefetch={false}
             >
-              {e.heroUrl && (
-                <div className="relative w-32 h-32 shrink-0 overflow-hidden bg-card border border-border/40">
+              <div
+                className="relative shrink-0 overflow-hidden"
+                style={{
+                  width: 128,
+                  height: 128,
+                  background: "var(--color-background-elevated)",
+                  border: "1px solid var(--color-border)",
+                }}
+              >
+                {e.heroUrl ? (
                   <Image
                     src={e.heroUrl}
                     alt=""
@@ -118,22 +166,43 @@ export default async function ThreadRoute({ params }: PageProps) {
                     sizes="128px"
                     className="object-cover"
                   />
-                </div>
-              )}
+                ) : (
+                  <PlaceholderPlate
+                    slug={e.slug}
+                    tone={toneFor(e.name)}
+                    tier={e.tier}
+                    height={128}
+                    showCaption={false}
+                  />
+                )}
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-3 flex-wrap mb-2">
-                  <h2 className="font-display text-3xl text-foreground group-hover:text-accent transition-colors">
+                  <Display
+                    size={32}
+                    weight={400}
+                    as="h2"
+                    className="group-hover:text-accent transition-colors"
+                    style={{ letterSpacing: "-0.012em", lineHeight: 1 }}
+                  >
                     {e.name}
-                  </h2>
-                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  </Display>
+                  <MonoLabel size={10} track="0.18em" tone="muted">
                     {e.type}
                     {e.dateStart != null
                       ? `  ·  ${fmtYear(e.dateStart, e.dateStartPrecision)}`
                       : ""}
-                  </span>
+                  </MonoLabel>
                 </div>
                 {e.summary && (
-                  <p className="text-base leading-relaxed text-muted-foreground">
+                  <p
+                    className="font-display"
+                    style={{
+                      fontSize: 16,
+                      lineHeight: 1.6,
+                      color: "var(--color-muted-foreground)",
+                    }}
+                  >
                     {firstSentence(e.summary, 240)}
                   </p>
                 )}
@@ -143,7 +212,10 @@ export default async function ThreadRoute({ params }: PageProps) {
         ))}
       </ol>
 
-      <div className="max-w-3xl mx-auto px-6 mt-20 pt-8 border-t border-border">
+      <div
+        className="max-w-3xl mx-auto px-6 mt-20 pt-8"
+        style={{ borderTop: "1px solid var(--color-border)" }}
+      >
         <Link
           href="/thread"
           className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent hover:text-foreground transition-colors focus:outline-none focus-visible:underline focus-visible:underline-offset-4"

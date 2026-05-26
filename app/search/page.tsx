@@ -11,6 +11,11 @@ import {
 import { getFeaturedEntities } from "@/lib/db/queries/entity";
 import { fmtYear, regionLabel } from "@/lib/format";
 import { SearchAutocomplete } from "@/components/search/SearchAutocomplete";
+import {
+  EditorialPageHeader,
+  MonoLabel,
+  Display,
+} from "@/components/scriptorium/primitives";
 
 interface PageProps {
   searchParams: Promise<{
@@ -62,150 +67,241 @@ export default async function SearchPage({ searchParams }: PageProps) {
   ]);
 
   return (
-    <main className="min-h-screen max-w-3xl mx-auto px-6 pt-16 pb-24">
-      <form action="/search" method="get" className="mb-8">
-        <label htmlFor="q" className="sr-only">
-          Search
-        </label>
-        <SearchAutocomplete initialQuery={query} />
-        {/* Preserve filter state when the user types */}
-        {filters.type && (
-          <input type="hidden" name="type" value={filters.type} />
-        )}
-        {filters.era && <input type="hidden" name="era" value={filters.era} />}
-      </form>
+    <main className="min-h-screen pb-32 codex-paper">
+      <div className="max-w-4xl mx-auto px-6 pt-16 pb-10">
+        <EditorialPageHeader
+          kicker="Quaerere · search"
+          title={query ? `“${query}”` : "Search the corpus."}
+          titleSize={query ? 56 : 72}
+          blurb={
+            query
+              ? undefined
+              : "A query goes through full-text and vector indexes both, then is reranked by relevance. Try a phrase, a name, or a theme."
+          }
+          divider={!query}
+        />
+      </div>
 
-      {/* Facet chips — only visible when there's a query */}
-      {query && (
-        <div className="mb-12 space-y-3">
-          <FacetRow
-            label="Type"
-            current={filters.type}
-            options={[
-              { id: undefined, label: "All" },
-              ...ENTITY_TYPES.map((t) => ({
-                id: t as EntityTypeFilter | undefined,
-                label: t[0]!.toUpperCase() + t.slice(1),
-              })),
-            ]}
-            href={(id) =>
-              filterHref({ q: query }, { type: id ?? null }, filters)
-            }
-          />
-          <FacetRow
-            label="Era"
-            current={filters.era}
-            options={[
-              { id: undefined, label: "All" },
-              ...ERAS.map((e) => ({
-                id: e.id as EraId | undefined,
-                label: e.label,
-              })),
-            ]}
-            href={(id) =>
-              filterHref({ q: query }, { era: id ?? null }, filters)
-            }
-          />
-        </div>
-      )}
+      <div className="max-w-3xl mx-auto px-6">
+        <form action="/search" method="get" className="mb-8">
+          <label htmlFor="q" className="sr-only">
+            Search
+          </label>
+          <SearchAutocomplete initialQuery={query} />
+          {filters.type && (
+            <input type="hidden" name="type" value={filters.type} />
+          )}
+          {filters.era && <input type="hidden" name="era" value={filters.era} />}
+        </form>
 
-      {query && hits.length === 0 && (
-        <p className="font-display italic text-xl text-muted-foreground">
-          No matches for &ldquo;{query}&rdquo;
-          {filtersActive ? " with these filters." : "."}
-        </p>
-      )}
-
-      {!query && (
-        <div className="space-y-16 mt-8">
-          <div>
-            <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-4">
-              Try
-            </h2>
-            <ul className="flex flex-wrap gap-x-5 gap-y-2 font-display italic text-xl text-muted-foreground">
-              {SAMPLE_QUERIES.map((s) => (
-                <li key={s}>
-                  <Link
-                    href={`/search?q=${encodeURIComponent(s)}`}
-                    className="hover:text-accent transition-colors focus:outline-none focus-visible:text-accent focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
-                  >
-                    {s}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+        {query && (
+          <div className="mb-10 space-y-3">
+            <FacetRow
+              label="Type"
+              current={filters.type}
+              options={[
+                { id: undefined, label: "All" },
+                ...ENTITY_TYPES.map((t) => ({
+                  id: t as EntityTypeFilter | undefined,
+                  label: t[0]!.toUpperCase() + t.slice(1),
+                })),
+              ]}
+              href={(id) =>
+                filterHref({ q: query }, { type: id ?? null }, filters)
+              }
+            />
+            <FacetRow
+              label="Era"
+              current={filters.era}
+              options={[
+                { id: undefined, label: "All" },
+                ...ERAS.map((e) => ({
+                  id: e.id as EraId | undefined,
+                  label: e.label,
+                })),
+              ]}
+              href={(id) =>
+                filterHref({ q: query }, { era: id ?? null }, filters)
+              }
+            />
           </div>
+        )}
 
-          {suggestions.length > 0 && (
+        {query && hits.length === 0 && (
+          <div
+            className="text-center py-16 px-6"
+            style={{
+              border: "1px solid var(--color-border)",
+              background: "var(--color-background-elevated)",
+            }}
+          >
+            <MonoLabel
+              tone="accent"
+              size={11}
+              track="0.32em"
+              className="block mb-3"
+            >
+              ¶ Nihil inventum est
+            </MonoLabel>
+            <Display size={36} italic style={{ lineHeight: 1.04 }}>
+              No matches for &ldquo;{query}&rdquo;.
+            </Display>
+            <p
+              className="font-display italic mx-auto mt-4"
+              style={{
+                fontSize: 16,
+                color: "var(--color-muted-foreground)",
+                maxWidth: 480,
+              }}
+            >
+              {filtersActive
+                ? "Try clearing the filters, or rephrase the query."
+                : "Try a related word or a broader theme — the Library is still growing."}
+            </p>
+          </div>
+        )}
+
+        {!query && (
+          <div className="space-y-16 mt-8">
             <div>
-              <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-6 border-t border-border pt-6">
-                Or wander
-              </h2>
-              <ul className="space-y-4">
-                {suggestions.map((s) => (
-                  <li key={s.qid}>
+              <MonoLabel
+                tone="accent"
+                size={11}
+                track="0.32em"
+                className="block mb-4"
+              >
+                ¶ Try
+              </MonoLabel>
+              <ul className="flex flex-wrap gap-x-5 gap-y-2">
+                {SAMPLE_QUERIES.map((s) => (
+                  <li key={s}>
                     <Link
-                      href={`/entity/${s.slug}`}
-                      className="group flex items-baseline gap-4 flex-wrap focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
+                      href={`/search?q=${encodeURIComponent(s)}`}
+                      className="font-display italic hover:text-accent transition-colors focus:outline-none focus-visible:text-accent focus-visible:underline focus-visible:underline-offset-4"
+                      style={{
+                        fontSize: 22,
+                        color: "var(--color-muted-foreground)",
+                      }}
                     >
-                      <span className="font-display text-xl text-foreground group-hover:text-accent group-focus-visible:text-accent transition-colors">
-                        {s.name}
-                      </span>
-                      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                        {s.primaryTag
-                          ? regionLabel(s.primaryTag)
-                          : s.type}
-                        {s.dateStart != null
-                          ? `  ·  ${fmtYear(s.dateStart)}`
-                          : ""}
-                      </span>
+                      {s}
                     </Link>
                   </li>
                 ))}
               </ul>
             </div>
-          )}
-        </div>
-      )}
 
-      {hits.length > 0 && (
-        <>
-          <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-8">
-            {hits.length} result{hits.length === 1 ? "" : "s"}
-          </h2>
-          <ul className="divide-y divide-border/60">
-            {hits.map((h) => (
-              <li key={h.qid} className="py-7">
-                <Link
-                  href={`/entity/${h.slug}`}
-                  className="block group focus:outline-none focus-visible:outline-1 focus-visible:outline-accent focus-visible:outline-offset-4"
+            {suggestions.length > 0 && (
+              <div>
+                <MonoLabel
+                  tone="accent"
+                  size={11}
+                  track="0.32em"
+                  className="block mb-6 pt-6"
+                  style={{ borderTop: "1px solid var(--color-border)" }}
                 >
-                  <div className="flex items-baseline gap-4 flex-wrap mb-2">
-                    <h3 className="font-display text-2xl md:text-3xl text-foreground group-hover:text-accent group-focus-visible:text-accent transition-colors">
-                      {h.name}
-                    </h3>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      {h.type}
-                      {h.dateStart != null
-                        ? `  ·  ${fmtYear(h.dateStart, h.dateStartPrecision)}`
-                        : ""}
-                    </span>
-                  </div>
-                  {h.snippet && (
-                    <p
-                      className="text-base leading-relaxed text-muted-foreground search-snippet"
-                      // ts_headline emits known-safe <mark> tags around
-                      // matched terms; surrounding text is the same plain
-                      // prose we generated for the summary.
-                      dangerouslySetInnerHTML={{ __html: h.snippet }}
-                    />
-                  )}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+                  ¶ Or wander
+                </MonoLabel>
+                <ul className="space-y-4">
+                  {suggestions.map((s) => (
+                    <li key={s.qid}>
+                      <Link
+                        href={`/entity/${s.slug}`}
+                        className="group flex items-baseline gap-4 flex-wrap no-underline focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
+                      >
+                        <Display
+                          size={22}
+                          weight={400}
+                          as="span"
+                          className="group-hover:text-accent transition-colors"
+                          style={{
+                            letterSpacing: "-0.008em",
+                            lineHeight: 1.1,
+                          }}
+                        >
+                          {s.name}
+                        </Display>
+                        <MonoLabel size={10} track="0.18em" tone="muted">
+                          {s.primaryTag
+                            ? regionLabel(s.primaryTag)
+                            : s.type}
+                          {s.dateStart != null
+                            ? `  ·  ${fmtYear(s.dateStart)}`
+                            : ""}
+                        </MonoLabel>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {hits.length > 0 && (
+          <>
+            <MonoLabel
+              tone="accent"
+              size={11}
+              track="0.32em"
+              className="block mb-8"
+            >
+              ¶ {hits.length} result{hits.length === 1 ? "" : "s"}
+            </MonoLabel>
+            <ul
+              className="divide-y"
+              style={{ borderColor: "var(--color-border)" }}
+            >
+              {hits.map((h) => (
+                <li
+                  key={h.qid}
+                  style={{
+                    padding: "22px 0",
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
+                >
+                  <Link
+                    href={`/entity/${h.slug}`}
+                    className="block group no-underline focus:outline-none focus-visible:outline-1 focus-visible:outline-accent focus-visible:outline-offset-4"
+                    prefetch={false}
+                  >
+                    <div className="flex items-baseline gap-4 flex-wrap mb-2">
+                      <Display
+                        size={28}
+                        weight={400}
+                        as="h3"
+                        className="group-hover:text-accent transition-colors"
+                        style={{ letterSpacing: "-0.012em", lineHeight: 1 }}
+                      >
+                        {h.name}
+                      </Display>
+                      <MonoLabel size={10} track="0.18em" tone="muted">
+                        {h.type}
+                        {h.dateStart != null
+                          ? `  ·  ${fmtYear(h.dateStart, h.dateStartPrecision)}`
+                          : ""}
+                      </MonoLabel>
+                    </div>
+                    {h.snippet && (
+                      <p
+                        className="font-display search-snippet"
+                        style={{
+                          fontSize: 16,
+                          lineHeight: 1.6,
+                          color: "var(--color-muted-foreground)",
+                        }}
+                        // ts_headline emits known-safe <mark> tags around
+                        // matched terms; surrounding text is the same plain
+                        // prose we generated for the summary.
+                        dangerouslySetInnerHTML={{ __html: h.snippet }}
+                      />
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
     </main>
   );
 }
@@ -228,8 +324,8 @@ function FacetRow<T extends string | undefined>({
 }) {
   return (
     <div className="flex items-baseline gap-4 flex-wrap">
-      <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground/80 min-w-[3rem]">
-        {label}
+      <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-accent min-w-[3rem]">
+        ¶ {label}
       </span>
       <ul className="flex flex-wrap gap-x-4 gap-y-1">
         {options.map((o) => {

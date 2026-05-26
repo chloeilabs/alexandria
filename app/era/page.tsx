@@ -1,11 +1,14 @@
-// Era index — five rows linking to /era/[id], each showing the year
-// boundaries and the count of entries currently in the corpus.
+// Era index — five rows linking to /era/[id]. Rendered SCRIPTORIUM-
+// style: a centred header, then a vertical register of the five eras
+// with their year boundaries and entry counts in the editorial ledger
+// pattern used on the homepage frontispiece.
 
 import type { Metadata } from "next";
 import Link from "next/link";
 
 import { getEraCounts } from "@/lib/db/queries/era";
 import { fmtYear } from "@/lib/format";
+import { MonoLabel, Display } from "@/components/scriptorium/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -17,42 +20,127 @@ export const metadata: Metadata = {
 
 export default async function EraIndex() {
   const eras = await getEraCounts();
+  const total = eras.reduce((acc, e) => acc + e.entryCount, 0);
 
   return (
-    <main className="min-h-screen pb-32">
-      <header className="max-w-3xl mx-auto px-6 pt-20 pb-10">
-        <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-6">
-          Five eras
+    <main className="min-h-screen pb-32 codex-paper">
+      <header className="max-w-4xl mx-auto px-6 pt-20 pb-12">
+        <div className="text-center">
+          <MonoLabel tone="accent" size={11} track="0.32em" className="block mb-3">
+            Tabula aetatum
+          </MonoLabel>
+          <Display
+            size={72}
+            italic
+            style={{ lineHeight: 1.02, letterSpacing: "-0.015em" }}
+          >
+            By era.
+          </Display>
+          <p
+            className="font-display italic mx-auto mt-5"
+            style={{
+              fontSize: 18,
+              color: "var(--color-muted-foreground)",
+              maxWidth: 600,
+            }}
+          >
+            A coarser sieve than civilization — five windows across
+            roughly five thousand years. Pick one and read across the
+            world at once.
+          </p>
         </div>
-        <h1 className="font-display font-light text-5xl md:text-7xl leading-[1.02] tracking-tight text-foreground">
-          By era
-        </h1>
-        <p className="mt-6 font-display italic text-xl leading-relaxed text-muted-foreground border-l-2 border-accent/40 pl-5">
-          A coarser sieve than civilization — five windows across five
-          thousand years. Pick one and read across the world at once.
-        </p>
       </header>
 
-      <ul className="max-w-3xl mx-auto px-6 divide-y divide-border/60">
-        {eras.map((e) => (
-          <li key={e.id} className="py-7">
-            <Link
-              href={`/era/${e.id}`}
-              className="group block focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
+      <section className="max-w-4xl mx-auto px-6">
+        <ul
+          className="border-y"
+          style={{
+            borderColor: "var(--color-rule)",
+            borderTopWidth: 1,
+            borderBottomWidth: 1,
+            borderStyle: "double",
+            listStyle: "none",
+            padding: 0,
+            margin: 0,
+          }}
+        >
+          {eras.map((e, i) => (
+            <li
+              key={e.id}
+              style={{
+                borderBottom:
+                  i < eras.length - 1
+                    ? "1px solid var(--color-border)"
+                    : "none",
+              }}
             >
-              <div className="flex items-baseline gap-4 flex-wrap mb-2">
-                <h2 className="font-display text-3xl md:text-4xl text-foreground group-hover:text-accent transition-colors">
-                  {e.label}
-                </h2>
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              <Link
+                href={`/era/${e.id}`}
+                className="group block no-underline focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent grid grid-cols-[40px_1fr_auto] md:grid-cols-[80px_1fr_180px_100px] items-baseline gap-4 md:gap-6 px-2 py-5 md:py-6"
+                prefetch={false}
+              >
+                <MonoLabel size={11} track="0.24em" tone="accent">
+                  {String(i + 1).padStart(2, "0")}
+                </MonoLabel>
+                <div className="min-w-0">
+                  <Display
+                    size={42}
+                    weight={400}
+                    className="group-hover:text-accent transition-colors"
+                    style={{ letterSpacing: "-0.015em", lineHeight: 1 }}
+                  >
+                    {e.label}
+                  </Display>
+                  <MonoLabel
+                    size={10}
+                    track="0.18em"
+                    tone="muted"
+                    className="block mt-1.5 md:hidden"
+                  >
+                    {fmtYear(e.min)} – {fmtYear(e.max)} · {e.entryCount}{" "}
+                    {e.entryCount === 1 ? "entry" : "entries"}
+                  </MonoLabel>
+                </div>
+                <MonoLabel
+                  size={10}
+                  track="0.18em"
+                  tone="muted"
+                  className="hidden md:inline"
+                >
                   {fmtYear(e.min)} – {fmtYear(e.max)}
-                  {`  ·  ${e.entryCount} ${e.entryCount === 1 ? "entry" : "entries"}`}
+                </MonoLabel>
+                <span
+                  className="font-display text-right hidden md:inline"
+                  style={{
+                    fontSize: 28,
+                    color: "var(--color-accent)",
+                    fontWeight: 500,
+                    letterSpacing: "-0.01em",
+                  }}
+                >
+                  {e.entryCount}
+                  <MonoLabel
+                    size={9}
+                    track="0.18em"
+                    className="block mt-0.5"
+                  >
+                    {e.entryCount === 1 ? "entry" : "entries"}
+                  </MonoLabel>
                 </span>
-              </div>
-            </Link>
-          </li>
-        ))}
-      </ul>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <p
+          className="font-display italic text-center mt-6"
+          style={{
+            fontSize: 13,
+            color: "var(--color-muted-foreground)",
+          }}
+        >
+          {total.toLocaleString()} dated entries across five eras
+        </p>
+      </section>
     </main>
   );
 }

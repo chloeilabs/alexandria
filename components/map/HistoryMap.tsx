@@ -8,6 +8,21 @@ import type { MapMarker } from "@/lib/db/queries/map";
 import { color, colorHex } from "@/lib/colors";
 import { fmtYear } from "@/lib/format";
 
+// Popup HTML is built via template strings and handed to
+// maplibre-gl's setHTML, which renders unescaped. Entity names + type
+// strings come from the DB (model output) and could in principle
+// contain "<" / ">" — escape them before interpolation so a malicious
+// or accidentally-marked-up value can't run script.
+function escapeHtml(value: string | null | undefined): string {
+  if (value == null) return "";
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 interface Props {
   markers: MapMarker[];
 }
@@ -144,8 +159,8 @@ export function HistoryMap({ markers }: Props) {
             popup
               .setLngLat(e.lngLat)
               .setHTML(
-                `<div style="font-family: Cormorant Garamond, Georgia, serif; font-size: 18px; line-height: 1.2; margin-bottom: 4px; color: #f6f5f0;">${emp.name}</div>
-                 <div style="font-family: JetBrains Mono, ui-monospace, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em; color: #a89d8a;">${emp.peak_label}</div>`,
+                `<div style="font-family: var(--font-display), Georgia, serif; font-size: 18px; line-height: 1.2; margin-bottom: 4px; color: var(--color-foreground);">${escapeHtml(emp.name)}</div>
+                 <div style="font-family: JetBrains Mono, ui-monospace, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--color-muted-foreground);">${escapeHtml(emp.peak_label)}</div>`,
               )
               .addTo(map);
           });
@@ -170,7 +185,7 @@ export function HistoryMap({ markers }: Props) {
           borderRadius: "50%",
           background: m.tier >= 2 ? accent : muted,
           border: `2px solid ${accent}`,
-          boxShadow: "0 0 0 1px rgba(0,0,0,0.4)",
+          boxShadow: "0 0 0 1px color-mix(in oklch, var(--color-foreground) 30%, transparent)",
           cursor: "pointer",
           opacity: m.tier >= 1 ? "0.95" : "0.6",
           transition: "transform 200ms ease-out",
@@ -192,8 +207,8 @@ export function HistoryMap({ markers }: Props) {
           closeButton: false,
           className: "library-map-popup",
         }).setHTML(`
-          <div style="font-family: Cormorant Garamond, Georgia, serif; font-size: 18px; line-height: 1.2; margin-bottom: 4px; color: #f6f5f0;">${m.name}</div>
-          <div style="font-family: JetBrains Mono, ui-monospace, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em; color: #a89d8a;">${m.type}${dateLine}</div>
+          <div style="font-family: var(--font-display), Georgia, serif; font-size: 18px; line-height: 1.2; margin-bottom: 4px; color: var(--color-foreground);">${escapeHtml(m.name)}</div>
+          <div style="font-family: JetBrains Mono, ui-monospace, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--color-muted-foreground);">${escapeHtml(m.type)}${escapeHtml(dateLine)}</div>
         `);
 
         new maplibregl.Marker({ element: el })
