@@ -7,6 +7,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { MonoLabel, Display } from "@/components/scriptorium/primitives";
 
 export default function GlobalError({
   error,
@@ -16,48 +17,78 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Send to whatever observability we have. The Vercel runtime
-    // already captures via @vercel/analytics + the function logs; this
-    // ensures something prints in the browser console for local debug.
     console.error("Page error:", error);
   }, [error]);
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
-      <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-6">
-        Something went wrong
+    <main className="min-h-screen flex flex-col items-center justify-center px-6 text-center codex-paper">
+      <div
+        className="font-display"
+        style={{
+          fontSize: 28,
+          color: "var(--color-accent)",
+          letterSpacing: "0.6em",
+          marginBottom: 18,
+        }}
+      >
+        ❦
       </div>
-      <h1 className="font-display font-light text-4xl md:text-5xl leading-[1.05] tracking-tight text-foreground max-w-xl">
+      <MonoLabel tone="accent" size={11} track="0.32em" className="block mb-4">
+        Erratum est
+      </MonoLabel>
+      <Display
+        size={56}
+        italic
+        style={{
+          letterSpacing: "-0.015em",
+          lineHeight: 1.04,
+          maxWidth: 580,
+        }}
+      >
         The Library lost its place.
-      </h1>
-      <p className="mt-6 font-display italic text-lg text-muted-foreground max-w-md leading-relaxed">
+      </Display>
+      <p
+        className="font-display italic"
+        style={{
+          fontSize: 18,
+          lineHeight: 1.55,
+          color: "var(--color-muted-foreground)",
+          maxWidth: 480,
+          margin: "24px auto 0",
+        }}
+      >
         Something failed while building this page. The error has been
         logged. You can try again, or follow a thread elsewhere.
       </p>
 
       {error.digest && (
-        <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
+        <MonoLabel
+          size={10}
+          track="0.18em"
+          tone="muted"
+          className="block mt-6"
+        >
           ref: {error.digest}
-        </p>
+        </MonoLabel>
       )}
 
       <div className="mt-10 flex items-baseline gap-8 flex-wrap justify-center">
         <button
           type="button"
           onClick={reset}
-          className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent hover:text-foreground transition-colors focus:outline-none focus-visible:underline focus-visible:underline-offset-4"
+          className="font-mono text-[11px] uppercase tracking-[0.22em] text-accent hover:text-foreground transition-colors border-b border-accent hover:border-foreground pb-1 focus:outline-none focus-visible:underline focus-visible:underline-offset-4"
         >
           Try again
         </button>
         <Link
           href="/"
-          className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground hover:text-accent transition-colors focus:outline-none focus-visible:underline focus-visible:underline-offset-4"
+          className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground hover:text-accent transition-colors focus:outline-none focus-visible:underline focus-visible:underline-offset-4"
         >
-          Back to the home page
+          Home
         </Link>
         <Link
           href="/random"
-          className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground hover:text-accent transition-colors focus:outline-none focus-visible:underline focus-visible:underline-offset-4"
+          className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground hover:text-accent transition-colors focus:outline-none focus-visible:underline focus-visible:underline-offset-4"
         >
           Random entry
         </Link>

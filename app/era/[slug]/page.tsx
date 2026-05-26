@@ -1,7 +1,7 @@
 // Era detail page: every entity whose date_start falls in this era,
 // grouped by civilization (parallel to /civilization/[slug] which
-// groups by era). Lets the reader scan one era across many parts of
-// the world at once.
+// groups by era). SCRIPTORIUM-style header + group dividers + prev/
+// next era pagination.
 
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -11,6 +11,12 @@ import Image from "next/image";
 import { getEraBySlug, eraById, type EraEntry } from "@/lib/db/queries/era";
 import { ERAS } from "@/lib/search";
 import { fmtYear, regionLabel, firstSentence } from "@/lib/format";
+import {
+  EditorialPageHeader,
+  MonoLabel,
+  Display,
+} from "@/components/scriptorium/primitives";
+import { PlaceholderPlate, toneFor } from "@/components/scriptorium/PlaceholderPlate";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -37,8 +43,6 @@ const UNCATEGORIZED = "uncategorized";
 function groupByCivilization(
   entries: EraEntry[],
 ): Array<{ tag: string; entries: EraEntry[] }> {
-  // Bucket by primary (first) civ tag; entities with no civ tag go in
-  // the uncategorized bucket so they're still visible.
   const buckets = new Map<string, EraEntry[]>();
   for (const e of entries) {
     const primary = e.civTags[0] ?? UNCATEGORIZED;
@@ -46,8 +50,6 @@ function groupByCivilization(
     if (arr) arr.push(e);
     else buckets.set(primary, [e]);
   }
-  // Order buckets by size desc, then alphabetical for stability.
-  // Uncategorized always last regardless of size.
   return [...buckets.entries()]
     .map(([tag, entries]) => ({ tag, entries }))
     .sort((a, b) => {
@@ -67,12 +69,10 @@ export default async function EraRoute({ params }: PageProps) {
 
   const groups = groupByCivilization(data.entries);
 
-  // Build prev/next era links from the ERAS array.
   const eraIndex = ERAS.findIndex((e) => e.id === data.id);
   const prevEra = eraIndex > 0 ? ERAS[eraIndex - 1] : null;
   const nextEra = eraIndex < ERAS.length - 1 ? ERAS[eraIndex + 1] : null;
 
-  // schema.org CollectionPage JSON-LD.
   const ldJson = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
@@ -93,47 +93,78 @@ export default async function EraRoute({ params }: PageProps) {
     },
   };
 
+  const meta =
+    `${data.entryCount} ${data.entryCount === 1 ? "entry" : "entries"}  ·  ${fmtYear(data.min)} – ${fmtYear(data.max)}`;
+
   return (
-    <main className="min-h-screen pb-32">
+    <main className="min-h-screen pb-32 codex-paper">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(ldJson) }}
       />
-      <header className="max-w-3xl mx-auto px-6 pt-20 pb-12">
-        <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-6">
-          Era
-          {`  ·  ${fmtYear(data.min)} – ${fmtYear(data.max)}`}
-          {`  ·  ${data.entryCount} ${data.entryCount === 1 ? "entry" : "entries"}`}
-        </div>
-        <h1 className="font-display font-light text-5xl md:text-7xl leading-[1.02] tracking-tight text-foreground">
-          The {data.label} era
-        </h1>
-      </header>
+
+      <div className="max-w-4xl mx-auto px-6 pt-20 pb-12">
+        <EditorialPageHeader
+          kicker="Lectiones aetatis"
+          title={`The ${data.label} era.`}
+          titleSize={72}
+          meta={meta}
+          blurb={`Read across the world at once. The ${data.label.toLowerCase()} era, grouped by civilisation — every entry the Library currently holds for these years.`}
+        />
+      </div>
 
       <div className="max-w-3xl mx-auto px-6 space-y-20">
         {groups.map((g) => (
           <section key={g.tag}>
-            <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-8 border-t border-border pt-8">
-              {g.tag === UNCATEGORIZED ? (
-                "Without a civilization"
-              ) : (
-                <Link
-                  href={`/civilization/${g.tag}`}
-                  className="hover:text-foreground transition-colors focus:outline-none focus-visible:text-foreground focus-visible:underline focus-visible:underline-offset-4"
-                >
-                  {regionLabel(g.tag)}
-                </Link>
-              )}
-            </h2>
+            <div
+              className="flex items-baseline justify-between mb-8 pb-2 border-b"
+              style={{ borderColor: "var(--color-accent)" }}
+            >
+              <span
+                className="font-display italic uppercase"
+                style={{
+                  fontSize: 18,
+                  letterSpacing: "0.18em",
+                  color: "var(--color-accent)",
+                }}
+              >
+                {g.tag === UNCATEGORIZED ? (
+                  "¶ Without a civilization"
+                ) : (
+                  <>
+                    ¶{" "}
+                    <Link
+                      href={`/civilization/${g.tag}`}
+                      className="hover:text-foreground transition-colors focus:outline-none focus-visible:text-foreground focus-visible:underline focus-visible:underline-offset-4"
+                    >
+                      {regionLabel(g.tag)}
+                    </Link>
+                  </>
+                )}
+              </span>
+              <MonoLabel size={10} track="0.18em" tone="muted">
+                {g.entries.length}{" "}
+                {g.entries.length === 1 ? "entry" : "entries"}
+              </MonoLabel>
+            </div>
             <ul className="space-y-10">
               {g.entries.map((e) => (
                 <li key={e.qid}>
                   <Link
                     href={`/entity/${e.slug}`}
-                    className="group flex gap-6 items-start focus:outline-none focus-visible:outline-1 focus-visible:outline-accent focus-visible:outline-offset-4"
+                    className="group flex gap-6 items-start no-underline focus:outline-none focus-visible:outline-1 focus-visible:outline-accent focus-visible:outline-offset-4"
+                    prefetch={false}
                   >
-                    {e.heroUrl && (
-                      <div className="relative w-24 h-24 shrink-0 overflow-hidden bg-card border border-border/40">
+                    <div
+                      className="relative shrink-0 overflow-hidden"
+                      style={{
+                        width: 96,
+                        height: 96,
+                        background: "var(--color-background-elevated)",
+                        border: "1px solid var(--color-border)",
+                      }}
+                    >
+                      {e.heroUrl ? (
                         <Image
                           src={e.heroUrl}
                           alt=""
@@ -141,20 +172,41 @@ export default async function EraRoute({ params }: PageProps) {
                           sizes="96px"
                           className="object-cover"
                         />
-                      </div>
-                    )}
+                      ) : (
+                        <PlaceholderPlate
+                          slug={e.slug}
+                          tone={toneFor(g.tag)}
+                          tier={e.tier}
+                          height={96}
+                          showCaption={false}
+                        />
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-3 flex-wrap mb-1">
-                        <h3 className="font-display text-2xl text-foreground group-hover:text-accent transition-colors">
+                        <Display
+                          size={26}
+                          weight={400}
+                          as="h3"
+                          className="group-hover:text-accent transition-colors"
+                          style={{ letterSpacing: "-0.012em", lineHeight: 1 }}
+                        >
                           {e.name}
-                        </h3>
-                        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        </Display>
+                        <MonoLabel size={10} track="0.18em" tone="muted">
                           {e.type}
                           {`  ·  ${fmtYear(e.dateStart, e.dateStartPrecision)}`}
-                        </span>
+                        </MonoLabel>
                       </div>
                       {e.summary && (
-                        <p className="text-base leading-relaxed text-muted-foreground">
+                        <p
+                          className="font-display"
+                          style={{
+                            fontSize: 16,
+                            lineHeight: 1.6,
+                            color: "var(--color-muted-foreground)",
+                          }}
+                        >
                           {firstSentence(e.summary, 220)}
                         </p>
                       )}
@@ -167,19 +219,35 @@ export default async function EraRoute({ params }: PageProps) {
         ))}
 
         {(prevEra || nextEra) && (
-          <nav className="grid grid-cols-2 gap-6 border-t border-border pt-8 mt-4">
+          <nav
+            className="grid grid-cols-2 gap-6 pt-8 mt-4"
+            style={{ borderTop: "1px solid var(--color-border)" }}
+            aria-label="Era navigation"
+          >
             <div>
               {prevEra && (
                 <Link
                   href={`/era/${prevEra.id}`}
-                  className="group block focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
+                  className="group block no-underline focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
+                  prefetch={false}
                 >
-                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground block mb-2">
+                  <MonoLabel
+                    size={10}
+                    track="0.22em"
+                    tone="muted"
+                    className="block mb-2"
+                  >
                     ← Earlier
-                  </span>
-                  <span className="font-display text-2xl text-foreground group-hover:text-accent transition-colors">
+                  </MonoLabel>
+                  <Display
+                    size={28}
+                    weight={400}
+                    italic
+                    className="group-hover:text-accent transition-colors"
+                    style={{ letterSpacing: "-0.012em", lineHeight: 1 }}
+                  >
                     {prevEra.label}
-                  </span>
+                  </Display>
                 </Link>
               )}
             </div>
@@ -187,14 +255,26 @@ export default async function EraRoute({ params }: PageProps) {
               {nextEra && (
                 <Link
                   href={`/era/${nextEra.id}`}
-                  className="group block focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
+                  className="group block no-underline focus:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-accent"
+                  prefetch={false}
                 >
-                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground block mb-2">
+                  <MonoLabel
+                    size={10}
+                    track="0.22em"
+                    tone="muted"
+                    className="block mb-2"
+                  >
                     Later →
-                  </span>
-                  <span className="font-display text-2xl text-foreground group-hover:text-accent transition-colors">
+                  </MonoLabel>
+                  <Display
+                    size={28}
+                    weight={400}
+                    italic
+                    className="group-hover:text-accent transition-colors"
+                    style={{ letterSpacing: "-0.012em", lineHeight: 1 }}
+                  >
                     {nextEra.label}
-                  </span>
+                  </Display>
                 </Link>
               )}
             </div>

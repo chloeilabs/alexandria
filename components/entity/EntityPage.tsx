@@ -17,6 +17,10 @@ import { renderInline } from "@/lib/markdown";
 import { labelFor } from "@/lib/wikidata/predicates";
 import { ERAS } from "@/lib/search";
 import { ArchiveGallery } from "@/components/entity/ArchiveGallery";
+import {
+  PlaceholderPlate,
+  toneFor,
+} from "@/components/scriptorium/PlaceholderPlate";
 
 /** Map a date_start year to its era id. Returns null for undated. */
 function eraIdFor(year: number | null | undefined): string | null {
@@ -161,10 +165,11 @@ export function EntityPage({ data }: { data: EntityPageData }) {
           </span>
           {entity.tier >= 3 && (
             <span
-              className="border border-accent/40 text-accent px-2 py-[2px] tracking-[0.2em]"
+              className="border-2 border-accent/60 text-accent px-2.5 py-[2px] tracking-[0.22em] font-mono"
+              style={{ borderStyle: "double" }}
               aria-label="Tier 3 curated entry — hand-picked imagery and long-form prose"
             >
-              Tier 3 · Curated
+              Tier 3 · Anchor
             </span>
           )}
         </div>
@@ -187,10 +192,12 @@ export function EntityPage({ data }: { data: EntityPageData }) {
         )}
       </header>
 
-      {/* Hero imagery — period art / photograph if Commons has one. */}
-      {hero && (
-        <figure className="max-w-4xl mx-auto px-6 pb-12">
-          <div className="relative w-full aspect-[16/9] overflow-hidden bg-card">
+      {/* Hero imagery — period art / photograph if Commons has one;
+          otherwise an archival placeholder plate keyed off the entity's
+          civilizational tag for a stable per-entry signature. */}
+      <figure className="max-w-4xl mx-auto px-6 pb-12">
+        {hero ? (
+          <div className="relative w-full aspect-[21/9] overflow-hidden bg-card">
             <Image
               src={hero.url}
               alt={`Image illustrating ${entity.name}`}
@@ -200,11 +207,27 @@ export function EntityPage({ data }: { data: EntityPageData }) {
               priority
             />
           </div>
-          <figcaption className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/70">
-            {hero.attribution}
-          </figcaption>
-        </figure>
-      )}
+        ) : (
+          <PlaceholderPlate
+            slug={entity.slug}
+            tone={toneFor(primaryTag ?? entity.type)}
+            caption={entity.name}
+            tier={entity.tier}
+            aspectRatio="21/9"
+            showCaption={false}
+          />
+        )}
+        <figcaption className="mt-2 flex justify-between items-baseline flex-wrap gap-2">
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
+            archival plate · {hero?.attribution ?? `${entity.name} · placeholder`}
+          </span>
+          {hero?.license && (
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
+              {hero.license}
+            </span>
+          )}
+        </figcaption>
+      </figure>
 
       {/* Stub state */}
       {entity.tier === 0 && (
@@ -361,20 +384,34 @@ export function EntityPage({ data }: { data: EntityPageData }) {
         </section>
       )}
 
-      {/* Sources */}
+      {/* Sources — rendered as the SCRIPTORIUM authority register. */}
       {sources.length > 0 && (
         <footer className="max-w-3xl mx-auto px-6 pt-16 mt-8">
-          <div className="flex items-baseline justify-between flex-wrap gap-x-6 gap-y-2 mb-4 border-t border-border pt-8">
-            <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent">
-              Sources
-            </h2>
+          <div
+            className="flex items-baseline justify-between flex-wrap gap-x-6 gap-y-2 mb-6 pt-8"
+            style={{
+              borderTop: "1px solid var(--color-rule)",
+              borderTopStyle: "double",
+              borderTopWidth: 1,
+            }}
+          >
+            <span
+              className="font-display italic uppercase"
+              style={{
+                fontSize: 14,
+                letterSpacing: "0.24em",
+                color: "var(--color-accent)",
+              }}
+            >
+              ¶ Auctoritates · sources
+            </span>
             {factCheck && (
               <span
                 className={
-                  "font-mono text-[10px] uppercase tracking-[0.18em] " +
+                  "font-mono text-[10px] uppercase tracking-[0.22em] " +
                   (factCheck.status === "clean"
                     ? "text-muted-foreground/80"
-                    : "text-amber-500/80")
+                    : "text-warn/80")
                 }
                 title={
                   factCheck.status === "clean"
@@ -388,38 +425,73 @@ export function EntityPage({ data }: { data: EntityPageData }) {
               </span>
             )}
           </div>
-          <ul className="space-y-2 font-mono text-[11px] text-muted-foreground">
+          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
             {sources.map((s) => (
-              <li key={s.id} className="flex items-baseline gap-3 flex-wrap">
-                <span>{sourceLabel(s.sourceKind)}</span>
-                {s.url && (
-                  <a
-                    href={s.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="text-accent/70 hover:text-accent transition-colors underline decoration-dotted underline-offset-2 focus:outline-none focus-visible:text-accent"
+              <li
+                key={s.id}
+                className="grid items-baseline gap-x-4 gap-y-1 grid-cols-1 sm:grid-cols-[1fr_auto]"
+                style={{
+                  padding: "12px 0",
+                  borderBottom: "1px dotted var(--color-border)",
+                }}
+              >
+                <div className="flex items-baseline gap-3 flex-wrap min-w-0">
+                  <span
+                    className="font-display"
+                    style={{
+                      fontSize: 17,
+                      color: "var(--color-foreground)",
+                      letterSpacing: "-0.005em",
+                    }}
                   >
-                    view source
-                  </a>
-                )}
+                    {sourceLabel(s.sourceKind)}
+                  </span>
+                  {s.url && (
+                    <a
+                      href={s.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent/80 hover:text-accent transition-colors underline decoration-dotted underline-offset-2 focus:outline-none focus-visible:text-accent"
+                    >
+                      view source ↗
+                    </a>
+                  )}
+                </div>
                 {s.license && (
-                  <span className="text-muted-foreground/60">{s.license}</span>
+                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70 text-right">
+                    {s.license}
+                  </span>
                 )}
               </li>
             ))}
           </ul>
           {factCheck && factCheck.flaggedClaims.length > 0 && (
             <details className="mt-6 group">
-              <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground hover:text-accent transition-colors">
-                Show flagged claims ({factCheck.flaggedClaims.length})
+              <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.22em] text-warn/80 hover:text-warn transition-colors">
+                ¶ Show flagged claims ({factCheck.flaggedClaims.length})
               </summary>
-              <ul className="mt-4 space-y-3 text-sm leading-relaxed text-muted-foreground">
+              <ul className="mt-4 space-y-3">
                 {factCheck.flaggedClaims.map((f, i) => (
-                  <li key={i} className="border-l-2 border-amber-500/40 pl-4">
-                    <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-amber-500/80 mb-1">
+                  <li
+                    key={i}
+                    style={{
+                      borderLeft: "2px solid color-mix(in oklch, var(--color-warn) 50%, transparent)",
+                      paddingLeft: 16,
+                    }}
+                  >
+                    <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-warn/80 mb-1">
                       {f.reason}
                     </div>
-                    <div className="font-display italic">&ldquo;{f.claim}&rdquo;</div>
+                    <div
+                      className="font-display italic"
+                      style={{
+                        fontSize: 15,
+                        lineHeight: 1.55,
+                        color: "var(--color-muted-foreground)",
+                      }}
+                    >
+                      &ldquo;{f.claim}&rdquo;
+                    </div>
                   </li>
                 ))}
               </ul>
