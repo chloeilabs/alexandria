@@ -22,11 +22,10 @@ The seed DB (~31 Tier-1 stubs) is not enough for `pnpm smoke --base=http://local
 1. Ensure Docker Postgres is up (steps 1–2 above).
 2. `set -a && source .env.prod && set +a && ./scripts/sync-prod-to-local.sh`  
    (or set `PROD_DATABASE_URL` to the Neon connection string; never commit it.)
-3. With `pnpm dev` running:  
+3. `unset DATABASE_URL` so the app uses local Docker (default fallback in `lib/db/index.ts`).
+4. With `pnpm dev` running:  
    `curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/refresh-featured`
-4. `pnpm tsx scripts/smoke-test.ts --base=http://localhost:3000`
-
-Unset `DATABASE_URL` in the shell so the app uses local Docker (default fallback in `lib/db/index.ts`).
+5. `pnpm tsx scripts/smoke-test.ts --base=http://localhost:3000`
 
 ### Key gotchas for cloud agents
 
