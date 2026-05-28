@@ -1,13 +1,38 @@
 # Alexandria — agent guide
 
-A living digital encyclopedia of human civilization. Tier 0 (Wikidata stub) → Tier 3 (hand-curated). Live at https://alexandria.chloei.ai. Source of truth for project decisions is `DECISIONS.md`; for what's verified-working is `VERIFICATION.md`; for editorial questions and resolved-question breadcrumbs is `OPEN_QUESTIONS.md`. Read those first when you need history.
+An AI-distilled knowledge base, designed for AI agents to call as an MCP
+tool. Every entry is synthesized by a language model from its own training
+knowledge, cross-checked against itself by a verifier pass, and surfaced
+through an MCP server. There is no Wikipedia, Wikidata, or third-party
+source behind it. Live at https://alexandria.chloei.ai. PR history on
+GitHub is the source of truth for past decisions — read recent merged PRs
+when you need context.
 
 ## Hard rules (non-negotiable)
 
-- **Anti-Western-bias is a hard requirement** at every layer — seed filter, homepage rotation, civilizational tags, calibration set. If you're adding content, querying, or ranking, ask whether the change would skew the corpus back toward the West. The audit at `pipeline/audit/coverage-report.ts` is the diagnostic.
-- **Never commit secrets.** `.env`, `.env.local`, `.env*.local`, `.env.prod`, `.env.production`, `.env.production.local` are all gitignored — keep it that way. GitHub push protection has caught one near-miss already. `AI_GATEWAY_API_KEY`, `DATABASE_URL`, `CRON_SECRET` are the sensitive ones.
-- **AI budget cap is enforced.** `pipeline/budget.ts:checkBudget()` runs three windows — monthly, daily, hourly — before every Gateway call. Defaults: `$600/mo` → `$20/day` → `$2/hr`, overridable per env var (production is currently `MONTHLY_BUDGET_USD=100` → `$3.33/day` → `$0.33/hr`). If a script throws `BudgetExceeded`, that's the safety net working — don't bypass it.
-- **`CRON_SECRET` must have no trailing whitespace.** Vercel rejects env values with trailing whitespace at build time. When adding via shell, use `printf "%s"` not `echo`.
+- **The "LLM-claimed, not externally verified" caveat must surface at every
+  read surface.** It's enforced in three places: `components/entity/
+  ProvenanceBadge.tsx` (above the narrative), `components/entity/
+  ClaimedCitations.tsx` (above any citation list), and
+  `lib/mcp/citation-wrap.ts` (in every MCP tool response payload). Never
+  remove or bypass these — the editorial integrity of the project depends
+  on them.
+- **Never commit secrets.** `.env`, `.env.local`, `.env.prod`, `.env*.local`
+  are all gitignored. `AI_GATEWAY_API_KEY`, `DATABASE_URL`, `ADMIN_TOKEN`,
+  `CRON_SECRET` are the sensitive ones. GitHub push protection has caught
+  near-misses before.
+- **AI budget cap is enforced.** `pipeline/budget.ts:checkBudget()` runs
+  three windows — monthly / daily / hourly — before every Gateway call,
+  reading actual spend from `generation_runs`. Defaults: `$100/mo →
+  $3.33/day → $0.33/hr`, overridable per env var. Production currently
+  runs `MONTHLY_BUDGET_USD=100`, `DAILY_BUDGET_USD=5`,
+  `BURN_PER_HOUR_USD` unset → `$0.50/hr` default. For bulk seeding, set
+  `BURN_PER_HOUR_USD=5` inline to converge with daily.
+  `BudgetExceeded` thrown from a script is the safety net working —
+  don't bypass it.
+- **`CRON_SECRET` and `ADMIN_TOKEN` must have no trailing whitespace.**
+  Vercel rejects env values with trailing whitespace at build time. When
+  adding via shell, use `printf "%s"` not `echo`.
 
 ## Stack
 
@@ -15,64 +40,105 @@ A living digital encyclopedia of human civilization. Tier 0 (Wikidata stub) → 
 |---|---|
 | Framework | Next.js 16 App Router · React 19 · TypeScript strict · Tailwind v4 |
 | DB | Postgres 17 + pgvector (HNSW), Drizzle ORM (postgres-js client) |
-| AI | Vercel AI Gateway → `google/gemini-3.5-flash` (`MODEL_FLASH`); Voyage 4 large for embeddings (1024-dim) |
+| AI | Vercel AI Gateway → `google/gemini-3.5-flash` for generation + verification; Voyage 4 large for embeddings (1024-dim) |
+| MCP | `mcp-handler` on `/api/[transport]` (HTTP) + `bin/alexandria-mcp.ts` (stdio) |
 | Search | Hybrid FTS + pgvector via Reciprocal Rank Fusion (k=60) |
-| Maps | MapLibre GL 5, hand-authored historical empire overlays |
-| Deploy | Vercel (Hobby tier covers everything); Neon Postgres (Vercel marketplace integration) |
+| Deploy | Vercel; Neon Postgres (marketplace integration) |
 
 Node 24, pnpm 10.
-
-### External APIs (curated 9-provider scope)
-
-Audio is explicitly out of scope (no ElevenLabs / TTS — see `~/.claude/projects/.../memory/feedback_alexandria_no_audio.md`). Met Museum + Smithsonian Open Access were trialled and deprecated 2026-05-24 due to recall + same-name disambiguation issues. The active 9:
-
-| Tier | Provider | Role |
-|---|---|---|
-| Essential | Wikidata | Entity universe, structured facts, multilingual aliases |
-| Essential | Wikipedia (REST + Action) | Base prose for every Tier 1 entity |
-| Essential | Wikimedia Commons | Default imagery |
-| Essential | Vercel AI Gateway (Gemini Flash + Voyage 4 large) | Synthesis + embeddings |
-| Essential | Internet Archive / Open Library | Tier 2 third narrate source (`lib/internet-archive/`) |
-| Essential | OpenAlex | Fact-check corroboration (`lib/openalex/`) |
-| Recommended | World Historical Gazetteer (Index API, no token) | Non-Western place name variants → `entity_aliases` |
-| Recommended | Wikisource (1911 Britannica) | Tier 2 second source (`lib/wikisource/`) |
-| Recommended | Europeana (key required) | Museum / manuscript imagery beyond Commons (`lib/europeana/`) |
-
-The integrations plan with full per-track reasoning lives at `~/.claude/plans/create-a-plan-what-rustling-sutherland.md`.
 
 ## Repo layout
 
 ```
-app/              Next.js routes (entity, civilization, era, thread, search, about, api/*)
-components/       React components, grouped by surface (entity/, nav/, search/, map/)
-lib/              db/ (schema + queries + retry), ai/ (prompts + gateway), wikipedia/, wikisource/,
-                  internet-archive/, openalex/, europeana/, whg/, media/relevance.ts, format.ts
-pipeline/         budget.ts, workers/ (summarize, narrate, fact-check), bulk/ (Wikidata + Wikipedia stream parsers), audit/
-scripts/          one-shot CLI runners: enrich-all, narrate-all, tag-all, embed-all, fetch-media,
-                  fact-check-all, fetch-museum-media (Europeana), enrich-whg, probe-ia-coverage,
-                  backfill-fact-check-corroboration, cleanup-museum-relevance, smoke-* (per-client),
-                  fix-flagged-entities, tier3/, repair-wikipedia-titles
-drizzle/migrations/ generated migrations (0000–0007)
-docker-compose.yml  local Postgres + pgvector on port 5434
+app/              Next.js routes: /, /search, /browse, /topic/[slug],
+                  /entity/[slug], /quality, /about, /admin,
+                  /api/health, /api/[transport] (MCP), /api/cron/refresh-featured,
+                  /api/admin/*
+bin/              alexandria-mcp.ts (stdio MCP entry for Claude Desktop)
+components/       admin/, browse/, entity/, featured/, layout/, nav/,
+                  quality/, search/, topic/, theme/
+data/             seeds.csv (curated entity list, pipeline:seed reads this)
+drizzle/migrations/ 0000_complex_quentin_quire.sql, 0001_indexes.sql
+lib/
+  ai/             index.ts (model ids + cost helpers), gateway.ts (SDK wrappers)
+  db/             schema.ts, retry.ts, index.ts, queries/{entity,featured,quality,search,topic}.ts
+  mcp/            server.ts (7-tool registration), citation-wrap.ts (caveat enforcer)
+  env.ts          dotenv loader (only reads .env.local + .env)
+middleware.ts     bearer-token gate for /admin + /api/admin/*
+pipeline/
+  budget.ts       3-window budget check
+  generate.ts     orchestrator: generate → verify → embed → insert
+  index.ts        loop runner used by scripts/generate-batch.ts
+  prompts/        generate.ts (the editorial prompt) + verify.ts
+scripts/
+  seed-from-csv.ts     load data/seeds.csv into seed_topics
+  generate-batch.ts    run pipeline against pending seed_topics
+  smoke-mcp.ts         HTTP smoke test of all 7 MCP tools
+  smoke-site.ts        production end-to-end smoke
+  init-db.sql          extensions + role search_path
+  sync-prod-to-local.sh  bring local Docker DB into parity with Neon (rare)
 ```
 
 ## Database topology
 
-Two databases. Don't confuse them.
+Two Postgres instances. Don't confuse them.
 
 | | Neon (production) | Local Docker (`localhost:5434`) |
 |---|---|---|
-| Purpose | The live, curated 376-entity site | Bulk research index from the Wikidata dump |
-| Reached via | `DATABASE_URL` env var (from Vercel marketplace integration in prod; `.env.prod` locally) | Default fallback when `DATABASE_URL` is unset (see `lib/db/index.ts:7-9`) |
-| Size | ~376 entities, ~50MB | ~242K entities and growing (bulk ingest still running multi-day), ~1GB |
-| Schema | Same Drizzle schema | Same Drizzle schema |
-| Never | Don't ship bulk entities directly to Neon — they're Tier 0 stubs that degrade UX | Don't run user-facing queries against this; it's a research index |
+| Purpose | The live, AI-generated 53-entity corpus | Optional local sandbox for pipeline iteration |
+| Reached via | `DATABASE_URL` env var (from `.env.prod`) | Default fallback when `DATABASE_URL` is unset (see `lib/db/index.ts`) |
+| Schema | Same 9-table Drizzle schema | Same |
+| Lifecycle | Source of truth for the live site | Throwaway; rebuild via migrations whenever |
 
-The bridge from bulk → Neon is `scripts/promote-from-bulk.ts` — picks specific QIDs, copies them, then the full enrich chain promotes to Tier 1+.
+## The 9-table schema
+
+`entities` (canonical row) · `entity_aliases` · `entity_relationships` ·
+`entity_claimed_citations` · `entity_topics` · `seed_topics` (curation
+queue) · `generation_runs` (cost + token log) · `review_queue` (flagged
+entities, severity ≥ medium) · `featured_rotation` (daily homepage set).
+
+## Pipeline flow
+
+1. **Seed**: editorial names land in `data/seeds.csv` → `pnpm pipeline:seed`
+   inserts into `seed_topics`.
+2. **Generate**: `generate-batch.ts` pulls pending seeds; for each:
+   1. `checkBudget` against `generation_runs` aggregate
+   2. `generateStructured` with the editorial prompt (model: Gemini 3.5 Flash)
+   3. `generateStructured` again on a verifier prompt (same model, fresh context)
+   4. `consensusScoreFrom(disagreements)` — 1.0 minus weighted severity
+   5. `embed` the canonical + short + summary (Voyage 4 large)
+   6. `sanitizeForPostgres` strips NULL bytes the model sometimes emits
+   7. Insert into `entities` inside a transaction, plus aliases / topics /
+      citations / relationships rows
+   8. High-severity disagreement → `status = 'flagged'` + row in `review_queue`
+3. **Surface**: web app + MCP server read from the same Postgres.
+   Featured rotation is a tiny daily cron that picks 3–8 entities for
+   the homepage.
+
+Costs (current settings, Gemini 3.5 Flash + Voyage 4 large): about
+**$0.025–$0.10 per entity** end-to-end depending on narrative length.
+
+## The 7 MCP tools
+
+| Tool | Purpose |
+|---|---|
+| `search_entities` | Hybrid FTS + vector RRF, ranked entity stubs |
+| `get_entity` | Full content for one entity by slug |
+| `get_related` | Entities linked by `entity_relationships` |
+| `list_by_type` | Filter by `person`/`place`/`event`/`concept`/`work`/`organization`/`species`/`artifact` |
+| `list_by_topic` | All entities tagged with a topic slug |
+| `list_by_date_range` | Anchored on `key_dates[].year` |
+| `get_citations` | LLM-claimed citation list for one entity |
+
+Every response goes through `lib/mcp/citation-wrap.ts` which prepends the
+"AI-distilled summaries. Citations are LLM-claimed, not externally
+verified." caveat string.
 
 ## Env loading quirk (you'll hit this)
 
-`lib/env.ts` only reads `.env.local` and `.env`. Production env vars live in `.env.prod` (gitignored). When running any TS script against Neon from a local shell:
+`lib/env.ts` only reads `.env.local` and `.env`. Production env vars live
+in `.env.prod` (gitignored). When running any TS script against Neon
+from a local shell:
 
 ```bash
 set -a
@@ -81,44 +147,34 @@ set +a
 pnpm tsx <script>
 ```
 
-Without loading `.env.prod` or explicitly exporting `DATABASE_URL`, scripts hit local Docker (the fallback in `lib/db/index.ts`).
+`AI_GATEWAY_API_KEY` lives in `.env.prod` too. Without sourcing, scripts
+hit local Docker (the `lib/db/index.ts` fallback) and the AI SDK fails
+auth.
 
-`AI_GATEWAY_API_KEY` lives in `.env.prod` too. If `[ai] AI_GATEWAY_API_KEY is not set` appears, that process does not have the key; load `.env.prod` as above or copy the key into `.env.local` for local-only scripts.
+## AI Gateway auth gotcha
 
-## The four tiers
+Vercel AI Gateway accepts two auth modes — `AI_GATEWAY_API_KEY` and
+`VERCEL_OIDC_TOKEN`. The AI SDK prefers `AI_GATEWAY_API_KEY` when both
+are set. If a freshly-issued API key was created with restricted scope
+(model-list only, no inference), you'll see a 401 with `"Authentication
+failed. Check that your Vercel credential is valid and has access to AI
+Gateway."` — not the clearer "no inference scope" error.
 
-- **Tier 0** — Wikidata stub: name, dates, type, coords, relationships. Surface only through inbound links; never on the homepage or above search fold.
-- **Tier 1** — 150-300 word summary from Wikipedia lead via `lib/ai/prompts/summarize.ts`.
-- **Tier 2** — 800-1500 word narrative from Wikipedia + (where available) 1911 Britannica + (where available) a pre-1924 Internet Archive English public-domain text via `lib/ai/prompts/narrate.ts`. Fact-checked separately by `pipeline/workers/fact-check.ts`; each flagged claim is enriched with OpenAlex peer-reviewed corroboration (signal: strong/partial/weak + top works) so editorial can deprioritise false positives. Published with the entry.
-- **Tier 3** — Hand-picked imagery, 2,500-3,500 word prose, no algorithmic caps. The 10 anchors: Hannibal, Mansa Musa, Wu Zetian, Hatshepsut, Songhai Empire, Saladin, Murasaki Shikibu, Akbar, Tupac Amaru II, Bronze Age Collapse. Mansa Musa is also hand-edited (the editorial benchmark).
+Workarounds:
+- Issue a new key from the dashboard with full scope, then
+  `vercel env add AI_GATEWAY_API_KEY <env>` for each scope.
+- Or `unset AI_GATEWAY_API_KEY` so the SDK falls back to
+  `VERCEL_OIDC_TOKEN` (project-scoped, full inference).
 
-Tier 3 hand-edits use scholarly sources beyond what the auto-checker sees, so fact-check rows for hand-edited Tier 3 are deliberately not maintained — delete the row if you re-fact-check by accident.
+## Postgres client compat
 
-## Standard enrichment chain
-
-Run order, all from project root:
-
-```bash
-pnpm tsx scripts/enrich-all.ts                       # Tier 0 → 1   (Wikipedia REST)
-pnpm tsx scripts/narrate-all.ts                      # Tier 1 → 2   (Wikipedia + Britannica + IA)
-pnpm tsx scripts/tag-all.ts                          # civilization + era tagging
-pnpm tsx scripts/embed-all.ts                        # Voyage 4 large → pgvector (1024-dim)
-pnpm tsx scripts/fetch-media.ts                      # Commons hero image
-pnpm tsx scripts/fetch-museum-media.ts               # Europeana additions (lands in Tier 3 ArchiveGallery)
-pnpm tsx scripts/enrich-whg.ts                       # WHG non-Western place name variants → entity_aliases
-pnpm tsx scripts/fact-check-all.ts                   # ground claims against sources + OpenAlex corroboration
-pnpm tsx scripts/rebuild-slugs.ts                    # promote unique slugs (foo-q123 → foo)
-```
-
-`enrich-all` and `narrate-all` cost ~$0.005 and ~$0.02 per entity. The newer scripts are free (Europeana / WHG / IA are no-cost APIs; OpenAlex is $1/day free tier, plenty for current scale). Always remember `set -a; source .env.prod; set +a` before targeting Neon.
-
-Op-only scripts (run on demand, not part of the standard chain):
+Neon runs Postgres 17. Homebrew/macports `pg_dump`/`psql` are often v14
+and refuse to connect with `server version mismatch`. Run them through
+the Docker image:
 
 ```bash
-pnpm tsx scripts/probe-ia-coverage.ts                # persist IA source rows for all Tier 2+ entities
-pnpm tsx scripts/backfill-fact-check-corroboration.ts   # retroactively enrich existing reviews
-pnpm tsx scripts/cleanup-museum-relevance.ts         # re-apply relevance filters to existing rows
-pnpm tsx scripts/smoke-{europeana,openalex,whg,ia}-client.ts   # DB-free per-client regression
+docker run --rm -e PGURL="$DATABASE_URL_UNPOOLED" postgres:17 \
+  bash -c 'pg_dump "$PGURL" --no-owner --no-acl --schema=public'
 ```
 
 ## Pre-commit / pre-push checks
@@ -126,41 +182,53 @@ pnpm tsx scripts/smoke-{europeana,openalex,whg,ia}-client.ts   # DB-free per-cli
 ```bash
 pnpm typecheck    # tsc --noEmit
 pnpm lint         # eslint .
-pnpm smoke        # end-to-end production smoke (19 surfaces, ~7s, exits 1 on fail)
+pnpm site:smoke   # production smoke (after deploy)
+pnpm mcp:smoke    # MCP HTTP smoke against http://localhost:3000
 ```
 
-CI runs typecheck + lint on every push and PR. Build succeeds on Vercel ≠ CI succeeds, because Vercel doesn't run lint. Run both locally before pushing.
+CI runs typecheck + lint on every push and PR.
 
 ## Git + deploy workflow
 
 - Default branch: `main`. Direct pushes deploy to production via Vercel.
-- Commit messages: conventional (`feat`, `fix`, `docs`, `chore`, `refactor`). End with the `Co-Authored-By` footer.
-- Vercel auto-builds on every push. New SHA appears in `/api/health` `build.commit_sha` ~90–120s after push.
-- Pre-PR-workflow: we still push direct to main. If you want a PR for a risky change, push to a feature branch — Vercel will preview it.
-
-The Claude Code auto-mode classifier blocks `git push origin main` by default; the user has to explicitly authorize each push session ("Push everything is good"). Don't try to work around this — it's the only soft enforcement on direct-to-main.
+- Conventional commit prefixes: `feat`, `fix`, `chore`, `docs`, `refactor`.
+- The Claude Code auto-mode classifier blocks `git push origin main` and
+  prod-side destructive ops by default; explicit per-session
+  authorization is required (e.g. user says "push to main").
+- Branch protection on `main` allows admin merge — use
+  `gh pr merge --admin --merge` after PR review.
 
 ## Operational surfaces
 
-- `/api/health` — DB roundtrip, entity count, tier breakdown, fact-check coverage, featured-cache age, build SHA. Returns 200 if ok, 503 if degraded.
-- `/api/cron/refresh-featured` — daily at 03:00 UTC (Vercel Cron). Validates `Authorization: Bearer ${CRON_SECRET}`. Refreshes the homepage featured-set cache.
-- Vercel Speed Insights + Analytics — wired in `app/layout.tsx`. Free on Hobby.
-
-## Documentation pointers
-
-- `DECISIONS.md` — every architectural trade-off with the reasoning. Read before making structurally significant changes.
-- `VERIFICATION.md` — acceptance criteria + how each is verified.
-- `OPEN_QUESTIONS.md` — editorial questions plus resolved-question breadcrumbs.
-- `README.md` — public-facing project intro + script index.
-- `/about` page — public-facing colophon.
+- `/api/health` — DB roundtrip, entity counts by status, last
+  generation_run, build SHA. 200 if ok, 503 if degraded.
+- `/api/cron/refresh-featured` — daily at 03:00 UTC (Vercel Cron).
+  Validates `Authorization: Bearer ${CRON_SECRET}`. Picks 3–8 entities
+  by recency + consensus into `featured_rotation`.
+- `/api/admin/*` and `/admin/*` — bearer-gated via `middleware.ts`
+  against `ADMIN_TOKEN`. Read-only review surface for flagged entities.
+- `/api/[transport]` — MCP server over Streamable HTTP. Reachable as
+  `https://alexandria.chloei.ai/api/mcp`.
 
 ## Common gotchas
 
-- Wikidata labels diverge from Wikipedia article titles in many cases (typos, non-English fallback labels). `lib/wikipedia/index.ts` has a sitelink fallback when called with `{ qid }`; the repair script `scripts/repair-wikipedia-titles.ts` backfills stuck entities.
-- `media.commons_url` has a unique index — two entities pointing to the same Commons file means only the first gets the row. Documented in DECISIONS.
-- pgbouncer compatibility: postgres-js client is configured with `prepare: false` (see `lib/db/index.ts`). Don't switch to prepared statements.
-- Neon cold-start: `lib/db/retry.ts` wraps queries with retry. Use `withRetry()` for any new route handler that depends on the DB.
+- **postgres-js array binding**: `sql\`x = ANY(${arr}::uuid[])\`` binds
+  the JS array as a composite record, not a uuid[]. Use Drizzle's
+  `inArray(col, arr)` instead (see `lib/db/queries/featured.ts`).
+- **AI SDK v6 model ids**: plain string model ids no longer auto-route
+  through the gateway. Wrap with `gateway(modelId)` from `@ai-sdk/gateway`
+  (already in `lib/ai/gateway.ts`).
+- **Model NULL bytes**: Gemini occasionally emits `\x00` in place of
+  accented characters. `pipeline/generate.ts:sanitizeForPostgres()`
+  strips them before insert.
+- **pgbouncer**: postgres-js is configured with `prepare: false` (see
+  `lib/db/index.ts`). Don't switch to prepared statements.
+- **Neon cold-start**: `lib/db/retry.ts` wraps queries with retry. Use
+  `withRetry()` for any new route handler that hits the DB.
 
 ## When you're not sure
 
-Pick the change that preserves the anti-Western-bias commitment, respects the budget cap, and keeps secrets out of git. When that's not enough, read `DECISIONS.md` for prior reasoning. When that's not enough, ask.
+Pick the change that preserves the LLM-claimed caveat at every read
+surface, respects the budget cap, and keeps secrets out of git. When
+that's not enough, read the merged PRs on GitHub. When that's not
+enough, ask.
