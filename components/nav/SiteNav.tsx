@@ -37,7 +37,6 @@ function useSearchShortcut() {
 }
 
 const LINKS: ReadonlyArray<{ href: string; label: string }> = [
-  { href: "/search", label: "Search" },
   { href: "/browse", label: "Browse" },
   { href: "/quality", label: "Quality" },
   { href: "/about", label: "About" },
@@ -83,34 +82,19 @@ export function SiteNav() {
         <ul className="hidden md:flex items-center gap-6">
           {LINKS.map((l) => {
             const isActive = pathname === l.href;
-            const isSearch = l.href === "/search";
             return (
               <li key={l.href}>
                 <Link
                   href={l.href}
                   className={
-                    "font-mono text-[10px] uppercase tracking-[0.20em] transition-colors focus:outline-none focus-visible:underline focus-visible:underline-offset-4 inline-flex items-baseline gap-1.5 " +
+                    "font-mono text-[10px] uppercase tracking-[0.20em] transition-colors focus:outline-none focus-visible:underline focus-visible:underline-offset-4 " +
                     (isActive
                       ? "text-accent"
                       : "text-muted-foreground hover:text-accent")
                   }
                   aria-current={isActive ? "page" : undefined}
                 >
-                  <span>{l.label}</span>
-                  {isSearch && (
-                    <kbd
-                      aria-hidden="true"
-                      className="font-mono text-[9px] px-1 py-px border"
-                      style={{
-                        borderColor: "var(--color-border)",
-                        color: "var(--color-muted-foreground)",
-                        letterSpacing: 0,
-                      }}
-                      title="Press / to focus search"
-                    >
-                      /
-                    </kbd>
-                  )}
+                  {l.label}
                 </Link>
               </li>
             );
