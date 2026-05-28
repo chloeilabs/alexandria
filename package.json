@@ -20,6 +20,7 @@
     "pipeline:seed": "tsx scripts/seed-from-csv.ts",
     "mcp:smoke": "tsx scripts/smoke-mcp.ts",
     "mcp:stdio": "tsx bin/alexandria-mcp.ts",
+    "mcp:build": "esbuild bin/alexandria-mcp.ts --bundle --platform=node --target=node20 --format=esm --packages=external --outfile=dist/alexandria-mcp.mjs --banner:js='#!/usr/bin/env node' && chmod +x dist/alexandria-mcp.mjs",
     "site:smoke": "tsx scripts/smoke-site.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -48,6 +49,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",
+    "esbuild": "^0.28.0",
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",

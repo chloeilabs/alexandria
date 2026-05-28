@@ -1,6 +1,9 @@
-#!/usr/bin/env -S npx tsx
 // Stdio MCP entry for Claude Desktop / Claude Code local config.
 // Reuses the same tool definitions as the HTTP route.
+//
+// Run via `pnpm exec tsx bin/alexandria-mcp.ts`, or bundle with
+// `pnpm mcp:build` and point Claude Desktop at `dist/alexandria-mcp.mjs`
+// (single-file, node-only, no tsx dependency).
 
 import "../lib/env";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
