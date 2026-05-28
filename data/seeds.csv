@@ -1,9 +1,15 @@
 # Alexandria seed list — name, hint, entity_type_guess
-# Edit before running `pnpm pipeline:seed`. Anything in this file goes
-# into the seed_topics table verbatim. Real editorial curation is the
-# user's call; this is a tiny demo set so the pipeline + MCP smoke
-# tests have something to chew on.
+#
+# Format: NAME, HINT, ENTITY_TYPE
+# Type must be one of: person | place | event | concept | work | organization
+#   | species | artifact | other (case-sensitive). Hint is free text.
+#
+# Curated for an "AI tool calling" knowledge base — names a typical agent
+# would commonly need to look up. Balanced across types and regions; no
+# single editorial axis (history-of-science, religion, etc.) imposed.
+# Real growth comes from observing usage and curating from there.
 
+# ── First wave (already generated) ──────────────────────────────────────
 Marie Curie, the chemist, person
 Mansa Musa, ruler of the Mali Empire, person
 Wu Zetian, Tang-dynasty empress, person
@@ -14,3 +20,60 @@ Saladin, Ayyubid sultan, person
 Murasaki Shikibu, author of The Tale of Genji, person
 Akbar, Mughal emperor, person
 Tupac Amaru II, Andean revolutionary, person
+
+# ── People (broad coverage: science, philosophy, art, leadership) ───────
+Isaac Newton, physicist and mathematician, person
+Albert Einstein, theoretical physicist, person
+Confucius, Chinese philosopher, person
+Aristotle, Greek philosopher, person
+Galileo Galilei, Italian astronomer, person
+Genghis Khan, Mongol conqueror, person
+Cleopatra VII, last pharaoh of Egypt, person
+Frida Kahlo, Mexican painter, person
+Ibn Sina, Persian polymath, person
+Ada Lovelace, mathematician and computing pioneer, person
+Nelson Mandela, South African statesman, person
+Sojourner Truth, abolitionist and women's rights advocate, person
+
+# ── Places ──────────────────────────────────────────────────────────────
+Rome, capital of Italy and ancient empire, place
+Constantinople, capital of the Byzantine and Ottoman empires, place
+Mecca, holy city of Islam, place
+Kyoto, former capital of Japan, place
+Tenochtitlan, Aztec capital, place
+Timbuktu, Malian center of learning, place
+
+# ── Events ──────────────────────────────────────────────────────────────
+French Revolution, 1789–1799, event
+Industrial Revolution, 18th–19th centuries, event
+Renaissance, European cultural movement, event
+Meiji Restoration, 1868 modernization of Japan, event
+Haitian Revolution, 1791–1804 enslaved-led independence, event
+Apollo 11 Moon Landing, 1969, event
+
+# ── Concepts (science, philosophy, religion, math) ──────────────────────
+Theory of Relativity, Einstein's spacetime framework, concept
+Photosynthesis, biological energy conversion, concept
+Theory of Evolution, Darwin's mechanism of natural selection, concept
+Quantum Mechanics, physics of subatomic scales, concept
+Calculus, mathematics of continuous change, concept
+Buddhism, Indian-originated religion and philosophy, concept
+Stoicism, Hellenistic philosophy, concept
+Democracy, system of collective decision-making, concept
+
+# ── Works (literature, scripture, art) ──────────────────────────────────
+The Iliad, ancient Greek epic, work
+The Mahabharata, Sanskrit epic, work
+Hamlet, Shakespeare tragedy, work
+On the Origin of Species, Darwin's 1859 treatise, work
+
+# ── Organizations ───────────────────────────────────────────────────────
+United Nations, post-1945 intergovernmental organization, organization
+Mongol Empire, 13th–14th century empire, organization
+Roman Catholic Church, oldest continuously functioning institution, organization
+British East India Company, mercantile and colonial corporation, organization
+
+# ── Species + artifacts (long tail) ─────────────────────────────────────
+Tardigrade, extremophile micro-animal, species
+Antikythera Mechanism, ancient Greek analog computer, artifact
+Rosetta Stone, trilingual decree stele, artifact

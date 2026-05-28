@@ -46,6 +46,34 @@ interface SeedRow {
   entityTypeGuess: string | null;
 }
 
+// Strip Postgres-incompatible NULL bytes (\x00) and lone surrogate halves
+// from any string inside an arbitrary JSON-like value. Models occasionally
+// emit `\x00` in place of accented characters (e.g. `Ren\x00 Cailli\x00` for
+// `René Caillié`); Postgres text columns reject any byte sequence containing
+// `\x00`. We replace null bytes with empty string rather than raising,
+// because the surrounding prose is still useful and the verifier already
+// flagged the issue.
+function sanitizeForPostgres<T>(value: T): T {
+  if (typeof value === "string") {
+    return value
+      .replace(/\x00/g, "")
+      // Strip unpaired surrogates which also break utf-8 encoding.
+      .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "")
+      .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "") as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((v) => sanitizeForPostgres(v)) as T;
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = sanitizeForPostgres(v);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 function consensusScoreFrom(
   disagreements: { severity: "low" | "medium" | "high" }[],
 ): { score: number; highSeverity: number; mediumSeverity: number } {
@@ -188,7 +216,10 @@ export async function generateEntity(seed: SeedRow): Promise<GenerateResult> {
   // ---- Step 4: insert ------------------------------------------------
   const entityId = await withRetry("insertEntity", async () => {
     return await db.transaction(async (tx) => {
-      const obj = generated.object;
+      const obj = sanitizeForPostgres(generated.object);
+      const verifiedDisagreements = sanitizeForPostgres(
+        verified.object.disagreements,
+      );
       const now = new Date();
       const status = shouldFlag ? "flagged" : "published";
       const [row] = await tx
@@ -208,7 +239,7 @@ export async function generateEntity(seed: SeedRow): Promise<GenerateResult> {
           generatorModel: generated.model,
           verifierModel: verified.model,
           consensusScore: consensus.score,
-          disagreementNotes: verified.object.disagreements,
+          disagreementNotes: verifiedDisagreements,
           embedding: embedded.embedding,
           publishedAt: status === "published" ? now : null,
         })
