@@ -2,11 +2,13 @@
 //
 // All calls route through the AI Gateway. AI SDK v6 requires the
 // `gateway(...)` provider wrapper to be explicit — plain string model ids
-// no longer auto-route reliably even with AI_GATEWAY_API_KEY set.
+// no longer auto-route reliably even with AI_GATEWAY_API_KEY set. The
+// `gateway` provider is bundled into the `ai` package itself (≥5.0.36),
+// so we import it from there rather than the standalone `@ai-sdk/gateway`
+// package — fewer dependencies and no separate version to keep in sync.
 
 import "../env";
-import { embed as aiEmbed, generateObject, generateText } from "ai";
-import { gateway } from "@ai-sdk/gateway";
+import { embed as aiEmbed, gateway, generateObject, generateText } from "ai";
 import type { z } from "zod";
 
 import {
