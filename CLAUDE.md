@@ -1,12 +1,12 @@
 # Alexandria — agent guide
 
 An AI-distilled knowledge base, designed for AI agents to call as an MCP
-tool. Every entry is synthesized by a language model from its own training
-knowledge, cross-checked against itself by a verifier pass, and surfaced
-through an MCP server. There is no Wikipedia, Wikidata, or third-party
-source behind it. Live at https://alexandria.chloei.ai. PR history on
-GitHub is the source of truth for past decisions — read recent merged PRs
-when you need context.
+tool. Every entry is synthesized by one language model and cross-checked
+by a **different** model family before it lands, then surfaced through an
+MCP server. There is no Wikipedia, Wikidata, or third-party source behind
+it. Live at https://alexandria.chloei.ai. PR history on GitHub is the
+source of truth for past decisions — read recent merged PRs when you
+need context. Corpus is currently 100 published entities, 0 flagged.
 
 ## Hard rules (non-negotiable)
 
@@ -33,6 +33,18 @@ when you need context.
 - **`CRON_SECRET` and `ADMIN_TOKEN` must have no trailing whitespace.**
   Vercel rejects env values with trailing whitespace at build time. When
   adding via shell, use `printf "%s"` not `echo`.
+- **Generator and verifier must be different model families.** Same-model
+  verification (Grokipedia's failure mode) is sampling variance, not
+  consensus — the verifier inherits the generator's blind spots. Default
+  combo: `deepseek/deepseek-v4-pro` generates, `anthropic/claude-haiku-4.5`
+  verifies (`lib/ai/gateway.ts`). When you change defaults, keep the
+  cross-family invariant.
+- **Don't add institutional meta-entries.** Wikipedia / NASA / EU and
+  the like were deliberately removed — AI-distilled re-summaries of
+  fast-moving institutions add little value over reading the institutions
+  themselves, and we caught factual errors in the Wikipedia entry that
+  same-model verification missed. The policy is documented in
+  `data/seeds.csv` near the Organizations section.
 
 ## Stack
 
@@ -40,7 +52,7 @@ when you need context.
 |---|---|
 | Framework | Next.js 16 App Router · React 19 · TypeScript strict · Tailwind v4 |
 | DB | Postgres 17 + pgvector (HNSW), Drizzle ORM (postgres-js client) |
-| AI | Vercel AI Gateway → `google/gemini-3.5-flash` for generation + verification; Voyage 4 large for embeddings (1024-dim) |
+| AI | Vercel AI Gateway → `deepseek/deepseek-v4-pro` generates, `anthropic/claude-haiku-4.5` verifies (cross-family by design); Voyage 4 large for embeddings (1024-dim) |
 | MCP | `mcp-handler` on `/api/[transport]` (HTTP) + `bin/alexandria-mcp.ts` (stdio) |
 | Search | Hybrid FTS + pgvector via Reciprocal Rank Fusion (k=60) |
 | Deploy | Vercel; Neon Postgres (marketplace integration) |
@@ -53,8 +65,10 @@ Node 24, pnpm 10.
 app/              Next.js routes: /, /search, /browse, /topic/[slug],
                   /entity/[slug], /quality, /about, /admin,
                   /api/health, /api/[transport] (MCP), /api/cron/refresh-featured,
-                  /api/admin/*
-bin/              alexandria-mcp.ts (stdio MCP entry for Claude Desktop)
+                  /api/admin/*, sitemap.ts, robots.ts, opengraph-image.tsx,
+                  entity/[slug]/opengraph-image.tsx
+bin/              alexandria-mcp.ts (stdio MCP entry; source for `pnpm mcp:build`)
+dist/             alexandria-mcp.mjs (bundled single-file binary, gitignored)
 components/       admin/, browse/, entity/, featured/, layout/, nav/,
                   quality/, search/, topic/, theme/
 data/             seeds.csv (curated entity list, pipeline:seed reads this)
@@ -67,7 +81,7 @@ lib/
 middleware.ts     bearer-token gate for /admin + /api/admin/*
 pipeline/
   budget.ts       3-window budget check
-  generate.ts     orchestrator: generate → verify → embed → insert
+  generate.ts     orchestrator: generate → verify → embed → insert (sanitizeForPostgres strips NULL bytes)
   index.ts        loop runner used by scripts/generate-batch.ts
   prompts/        generate.ts (the editorial prompt) + verify.ts
 scripts/
@@ -85,7 +99,7 @@ Two Postgres instances. Don't confuse them.
 
 | | Neon (production) | Local Docker (`localhost:5434`) |
 |---|---|---|
-| Purpose | The live, AI-generated 53-entity corpus | Optional local sandbox for pipeline iteration |
+| Purpose | The live, AI-generated 100-entity corpus | Optional local sandbox for pipeline iteration |
 | Reached via | `DATABASE_URL` env var (from `.env.prod`) | Default fallback when `DATABASE_URL` is unset (see `lib/db/index.ts`) |
 | Schema | Same 9-table Drizzle schema | Same |
 | Lifecycle | Source of truth for the live site | Throwaway; rebuild via migrations whenever |
@@ -103,8 +117,8 @@ entities, severity ≥ medium) · `featured_rotation` (daily homepage set).
    inserts into `seed_topics`.
 2. **Generate**: `generate-batch.ts` pulls pending seeds; for each:
    1. `checkBudget` against `generation_runs` aggregate
-   2. `generateStructured` with the editorial prompt (model: Gemini 3.5 Flash)
-   3. `generateStructured` again on a verifier prompt (same model, fresh context)
+   2. `generateStructured` with the editorial prompt — `DEFAULT_GENERATOR` = `deepseek/deepseek-v4-pro`
+   3. `generateStructured` again on a verifier prompt, fresh context — `DEFAULT_VERIFIER` = `anthropic/claude-haiku-4.5` (different family, this is the point)
    4. `consensusScoreFrom(disagreements)` — 1.0 minus weighted severity
    5. `embed` the canonical + short + summary (Voyage 4 large)
    6. `sanitizeForPostgres` strips NULL bytes the model sometimes emits
@@ -115,8 +129,12 @@ entities, severity ≥ medium) · `featured_rotation` (daily homepage set).
    Featured rotation is a tiny daily cron that picks 3–8 entities for
    the homepage.
 
-Costs (current settings, Gemini 3.5 Flash + Voyage 4 large): about
-**$0.025–$0.10 per entity** end-to-end depending on narrative length.
+Costs (current cross-family combo): about **$0.013 per entity** end-to-end.
+Empirical numbers from the 18-entry DeepSeek × Haiku batch: avg consensus
+0.94, 89% perfect, 5% medium disputes, 5% major. Compared to the original
+Gemini × Gemini same-family batch (n=84): 73% cost reduction with
+roughly the same major-dispute catch rate but ~3× lower minor-dispute
+rate (Haiku skips style nits, catches real factual errors).
 
 ## The 7 MCP tools
 
@@ -151,20 +169,24 @@ pnpm tsx <script>
 hit local Docker (the `lib/db/index.ts` fallback) and the AI SDK fails
 auth.
 
-## AI Gateway auth gotcha
+## AI Gateway auth gotchas
 
-Vercel AI Gateway accepts two auth modes — `AI_GATEWAY_API_KEY` and
-`VERCEL_OIDC_TOKEN`. The AI SDK prefers `AI_GATEWAY_API_KEY` when both
-are set. If a freshly-issued API key was created with restricted scope
-(model-list only, no inference), you'll see a 401 with `"Authentication
-failed. Check that your Vercel credential is valid and has access to AI
-Gateway."` — not the clearer "no inference scope" error.
+Two distinct failure modes that look like the same error:
 
-Workarounds:
-- Issue a new key from the dashboard with full scope, then
-  `vercel env add AI_GATEWAY_API_KEY <env>` for each scope.
-- Or `unset AI_GATEWAY_API_KEY` so the SDK falls back to
-  `VERCEL_OIDC_TOKEN` (project-scoped, full inference).
+**1. API key without inference scope.** Vercel AI Gateway accepts both
+`AI_GATEWAY_API_KEY` and `VERCEL_OIDC_TOKEN`. The AI SDK prefers the API
+key when both are set. If a freshly-issued key was created with
+restricted scope (model-list only, no inference), you'll see a 401:
+*"Authentication failed. Check that your Vercel credential is valid and
+has access to AI Gateway."* Not the clearer "no inference scope" error.
+Fix: regenerate the key with full scope from the dashboard, or
+temporarily `unset AI_GATEWAY_API_KEY` so the SDK falls back to OIDC.
+
+**2. Credit balance exhausted.** Different error body: *"A positive
+credit balance is required for all requests, including BYOK..."* with a
+top-up URL. Distinct from the auth-scope 401; if the body mentions
+"credit balance" specifically, it's billing, not auth. Fix: top up at
+the URL in the error.
 
 ## Postgres client compat
 
@@ -184,9 +206,12 @@ pnpm typecheck    # tsc --noEmit
 pnpm lint         # eslint .
 pnpm site:smoke   # production smoke (after deploy)
 pnpm mcp:smoke    # MCP HTTP smoke against http://localhost:3000
+pnpm mcp:build    # bundle bin/alexandria-mcp.ts → dist/alexandria-mcp.mjs
 ```
 
-CI runs typecheck + lint on every push and PR.
+CI runs typecheck + lint on every push and PR. `mcp:build` is local
+only — the bundled `dist/` is gitignored; Claude Desktop configs point
+at the developer's local build.
 
 ## Git + deploy workflow
 
@@ -218,9 +243,20 @@ CI runs typecheck + lint on every push and PR.
 - **AI SDK v6 model ids**: plain string model ids no longer auto-route
   through the gateway. Wrap with `gateway(modelId)` from `@ai-sdk/gateway`
   (already in `lib/ai/gateway.ts`).
-- **Model NULL bytes**: Gemini occasionally emits `\x00` in place of
-  accented characters. `pipeline/generate.ts:sanitizeForPostgres()`
-  strips them before insert.
+- **Model NULL bytes**: models occasionally emit `\x00` in place of
+  accented characters (observed: `Ren\x00 Cailli\x00` for `René Caillié`).
+  `pipeline/generate.ts:sanitizeForPostgres()` strips them recursively
+  from every string before insert; Postgres text columns reject any
+  byte sequence containing `\x00`.
+- **Satori + ImageResponse (next/og)**: every div with children needs
+  explicit `display: flex`. React Fragments (`<></>`) are not supported.
+  Caught the hard way on `app/entity/[slug]/opengraph-image.tsx`.
+- **pnpm-managed esbuild**: pnpm doesn't expose transitive `.bin/`
+  entries — esbuild lives at `node_modules/.pnpm/node_modules/.bin/esbuild`.
+  `pnpm mcp:build` uses the locally-installed top-level esbuild.
+- **`seed-from-csv.ts` doesn't dedupe**: re-running it inserts duplicate
+  rows for every line in the CSV. Dedupe by hand if it matters:
+  `DELETE FROM seed_topics WHERE status='pending' AND name IN (SELECT canonical_name FROM entities);`
 - **pgbouncer**: postgres-js is configured with `prepare: false` (see
   `lib/db/index.ts`). Don't switch to prepared statements.
 - **Neon cold-start**: `lib/db/retry.ts` wraps queries with retry. Use

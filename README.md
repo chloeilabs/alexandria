@@ -4,11 +4,11 @@ An AI-distilled knowledge base, designed for AI agents to call as an MCP tool.
 
 **Live:** [alexandria.chloei.ai](https://alexandria.chloei.ai)
 
-> Production health (2026-05-27): 53 entities (52 published, 1 flagged for review), avg consensus 0.93, $1.67 spent of $5/day cap.
+> Production health (2026-05-28): 100 entities, 0 flagged, avg consensus ≈ 0.96.
 
 ## What it is
 
-Each entry is synthesized by a language model from its own training knowledge — not pulled from Wikipedia, Wikidata, or any third-party source. A second pass with the same model (fresh context) cross-checks the first; disagreements become a `consensus_score` and any high-severity disagreement flags the entry for editorial review.
+Each entry is synthesized by one language model from its training knowledge — not pulled from Wikipedia, Wikidata, or any third-party source. A second pass with a **different model family** (Anthropic Claude Haiku 4.5 verifying DeepSeek V4 Pro's generation) cross-checks the first; disagreements become a `consensus_score` and any high-severity disagreement flags the entry for editorial review. Cross-family verification — vs. same-model self-consistency, which is Grokipedia's documented failure mode — is the core credibility move.
 
 **Every read surface carries the same caveat**: *"AI-distilled summaries. Citations are LLM-claimed, not externally verified."* Treat the corpus the way you'd treat a thoughtful undergrad's lit review — useful directional knowledge, not a primary source.
 
@@ -26,8 +26,9 @@ The corpus is exposed three ways:
 | **Database** | Neon Postgres 17 + pgvector (HNSW), Drizzle ORM |
 | **Search** | Hybrid FTS + pgvector embeddings via Reciprocal Rank Fusion |
 | **Embeddings** | Voyage 4 large, 1024-dim cosine, through Vercel AI Gateway |
-| **Generation** | Google Gemini 3.5 Flash through Vercel AI Gateway |
-| **MCP server** | `mcp-handler` on `/api/[transport]` + stdio bin |
+| **Generation** | DeepSeek V4 Pro through Vercel AI Gateway |
+| **Verification** | Anthropic Claude Haiku 4.5 (different family — intentional) |
+| **MCP server** | `mcp-handler` on `/api/[transport]` + stdio bin (bundled via `pnpm mcp:build`) |
 
 ## The 7 MCP tools
 
@@ -85,14 +86,20 @@ pnpm pipeline:generate --limit 25
 
 ## Connect Claude Desktop
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+First build a single-file bundle (no tsx dependency):
+
+```bash
+pnpm mcp:build   # emits dist/alexandria-mcp.mjs (~25 KB)
+```
+
+Then add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "alexandria": {
-      "command": "/abs/path/to/alexandria/node_modules/.bin/tsx",
-      "args": ["/abs/path/to/alexandria/bin/alexandria-mcp.ts"],
+      "command": "node",
+      "args": ["/abs/path/to/alexandria/dist/alexandria-mcp.mjs"],
       "cwd": "/abs/path/to/alexandria"
     }
   }
@@ -104,7 +111,7 @@ The bin loads `.env.local` from `cwd`, then connects to Neon (if
 
 ## Costs
 
-Per-entity end-to-end (generate + verify + embed): **about $0.025–$0.10** on Gemini 3.5 Flash + Voyage 4 large. Budget caps are enforced in `pipeline/budget.ts` against actual spend logged in the `generation_runs` table:
+Per-entity end-to-end (generate + verify + embed): **about $0.013** on the current cross-family combo (DeepSeek V4 Pro + Claude Haiku 4.5 + Voyage 4 large). That's a 55% reduction vs. the previous same-model Gemini × Gemini configuration, and the consensus_score now reflects cross-family agreement rather than sampling variance. Budget caps are enforced in `pipeline/budget.ts` against actual spend logged in the `generation_runs` table:
 
 ```
 MONTHLY_BUDGET_USD=100   # master cap
