@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Container } from "@/components/layout/Container";
 import { FeaturedRow } from "@/components/featured/FeaturedRow";
+import { SearchInput } from "@/components/search/SearchInput";
 import { getTodaysFeatured } from "@/lib/db/queries/featured";
 import { entitiesByIds } from "@/lib/db/queries/entity";
 import { getQualitySummary } from "@/lib/db/queries/quality";
@@ -22,60 +23,25 @@ export default async function Home() {
   return (
     <main className="py-16">
       <Container>
-        <section className="mb-16 max-w-3xl">
-          <p className="font-mono text-[10px] uppercase tracking-[0.32em] text-accent mb-4">
-            ¶ The Library
-          </p>
-          <h1
-            className="font-display italic"
-            style={{
-              fontSize: 64,
-              letterSpacing: "-0.02em",
-              lineHeight: 1.02,
-            }}
-          >
-            An AI-distilled knowledge base.
-          </h1>
+        <section className="mb-16">
+          <SearchInput />
           <p
-            className="font-display italic mt-6"
+            className="mt-5 font-display italic"
             style={{
-              fontSize: 21,
-              lineHeight: 1.6,
+              fontSize: 16,
+              lineHeight: 1.55,
               color: "var(--color-muted-foreground)",
-              maxWidth: 640,
             }}
           >
-            Designed for AI tool calling; readable by humans. Every entry
-            is synthesized by a model from its own training, then
-            cross-checked for consensus.{" "}
+            An AI-distilled knowledge base, designed for AI tool calling
+            and readable by humans.{" "}
             <Link
               href="/about"
-              className="text-accent underline decoration-dotted underline-offset-4"
+              className="text-accent underline decoration-dotted underline-offset-4 hover:text-foreground transition-colors"
             >
               How it works.
             </Link>
           </p>
-
-          <div className="mt-8 flex items-baseline gap-8 flex-wrap">
-            <Link
-              href="/search"
-              className="font-mono text-[11px] uppercase tracking-[0.22em] text-accent hover:text-foreground transition-colors border-b border-accent hover:border-foreground pb-1"
-            >
-              Search the catalogue
-            </Link>
-            <Link
-              href="/browse"
-              className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground hover:text-accent transition-colors"
-            >
-              Browse by type
-            </Link>
-            <code
-              className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground"
-              title="MCP endpoint"
-            >
-              MCP: /api/mcp
-            </code>
-          </div>
         </section>
 
         <section className="mb-16">
