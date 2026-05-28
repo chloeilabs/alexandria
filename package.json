@@ -28,7 +28,6 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@ai-sdk/gateway": "^1.0.0",
     "@modelcontextprotocol/sdk": "^1.17.0",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
