@@ -14,7 +14,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../lib/db";
 
 export const MONTHLY_BUDGET_USD = Number(
-  process.env.MONTHLY_BUDGET_USD ?? 600,
+  process.env.MONTHLY_BUDGET_USD ?? 100,
 );
 export const DAILY_BUDGET_USD = Number(
   process.env.DAILY_BUDGET_USD ?? MONTHLY_BUDGET_USD / 30,
@@ -44,7 +44,7 @@ export class BudgetExceeded extends Error {
 export async function monthlySpendUsd(): Promise<number> {
   const rows = await db.execute<{ sum: string | null }>(sql`
     SELECT COALESCE(SUM(api_cost_usd), 0)::text AS sum
-    FROM pipeline_runs
+    FROM generation_runs
     WHERE date_trunc('month', started_at) = date_trunc('month', NOW())
       AND status IN ('completed', 'running')
   `);
@@ -56,7 +56,7 @@ export async function monthlySpendUsd(): Promise<number> {
 export async function todaysSpendUsd(): Promise<number> {
   const rows = await db.execute<{ sum: string | null }>(sql`
     SELECT COALESCE(SUM(api_cost_usd), 0)::text AS sum
-    FROM pipeline_runs
+    FROM generation_runs
     WHERE started_at::date = CURRENT_DATE
       AND status IN ('completed', 'running')
   `);
@@ -68,7 +68,7 @@ export async function todaysSpendUsd(): Promise<number> {
 export async function hourlySpendUsd(): Promise<number> {
   const rows = await db.execute<{ sum: string | null }>(sql`
     SELECT COALESCE(SUM(api_cost_usd), 0)::text AS sum
-    FROM pipeline_runs
+    FROM generation_runs
     WHERE started_at > NOW() - INTERVAL '1 hour'
       AND status IN ('completed', 'running')
   `);

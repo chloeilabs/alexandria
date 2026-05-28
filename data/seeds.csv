@@ -1,0 +1,16 @@
+# Alexandria seed list — name, hint, entity_type_guess
+# Edit before running `pnpm pipeline:seed`. Anything in this file goes
+# into the seed_topics table verbatim. Real editorial curation is the
+# user's call; this is a tiny demo set so the pipeline + MCP smoke
+# tests have something to chew on.
+
+Marie Curie, the chemist, person
+Mansa Musa, ruler of the Mali Empire, person
+Wu Zetian, Tang-dynasty empress, person
+Songhai Empire, West African empire 1464–1591, organization
+Bronze Age Collapse, late-12th-century-BCE Mediterranean collapse, event
+Hatshepsut, Egyptian pharaoh, person
+Saladin, Ayyubid sultan, person
+Murasaki Shikibu, author of The Tale of Genji, person
+Akbar, Mughal emperor, person
+Tupac Amaru II, Andean revolutionary, person

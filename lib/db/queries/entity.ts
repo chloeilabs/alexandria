@@ -1,504 +1,256 @@
-// Server-side data fetch helpers for entity pages.
+// Entity read-side queries.
 
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 
-import { db } from "../index";
-import { withRetry } from "../retry";
-import { eraFor } from "../../format";
+import { db } from "..";
 import {
-  type Entity,
-  type Source,
   entities,
   entityAliases,
-  entityRegions,
-  factCheckReviews,
-  featuredCache,
-  media,
-  relationships,
-  sources,
+  entityClaimedCitations,
+  entityRelationships,
+  entityTopics,
+  type Entity,
+  type EntityType,
 } from "../schema";
+import { withRetry } from "../retry";
 
-export interface RelatedEntity {
-  entity: Entity;
-  predicate: string;
-  direction: "outbound" | "inbound";
-}
-
-export interface RegionPeer {
-  qid: string;
+export interface EntityStub {
+  id: string;
   slug: string;
-  name: string;
-  type: string;
-  dateStart: number | null;
-  dateStartPrecision: string | null;
+  canonicalName: string;
+  entityType: string;
+  shortDescription: string;
+  consensusScore: number;
 }
 
-export interface SimilarEntity {
-  qid: string;
-  slug: string;
-  name: string;
-  type: string;
-  tier: number;
-  dateStart: number | null;
-  dateStartPrecision: string | null;
-  /** Cosine similarity in [0, 1]; higher = closer in embedding space. */
-  similarity: number;
+export interface EntityFull extends EntityStub {
+  disambiguator: string | null;
+  summary: string;
+  narrative: string;
+  structuredFacts: Record<string, unknown>;
+  keyDates: Array<{ year: number; precision: string; label: string; kind: string }>;
+  coords: { lat: number; lng: number } | null;
+  generatorModel: string;
+  verifierModel: string | null;
+  aliases: string[];
+  topics: string[];
 }
 
-export interface FactCheckFinding {
-  claim: string;
-  reason: "missing" | "contradicts" | "uncertain";
-  source_excerpt?: string;
+const stubColumns = {
+  id: entities.id,
+  slug: entities.slug,
+  canonicalName: entities.canonicalName,
+  entityType: entities.entityType,
+  shortDescription: entities.shortDescription,
+  consensusScore: entities.consensusScore,
+} as const;
+
+export async function getEntityBySlugOrId(
+  slugOrId: string,
+): Promise<Entity | null> {
+  return await withRetry("getEntityBySlugOrId", async () => {
+    const isUuid = /^[0-9a-f-]{36}$/i.test(slugOrId);
+    const rows = await db
+      .select()
+      .from(entities)
+      .where(isUuid ? eq(entities.id, slugOrId) : eq(entities.slug, slugOrId))
+      .limit(1);
+    return rows[0] ?? null;
+  });
 }
 
-export interface FactCheckSummary {
-  status: "clean" | "flagged" | "failed";
-  model: string;
-  createdAt: Date;
-  flaggedClaims: FactCheckFinding[];
-}
-
-export interface EntityPageData {
-  entity: Entity;
-  aliases: Array<{ alias: string; language: string }>;
-  related: RelatedEntity[];
-  /** QIDs that this entity links to but aren't in our DB yet (stubs). */
-  orphanTargets: Array<{ qid: string; predicate: string }>;
-  sources: Source[];
-  media: Array<{
-    url: string;
-    attribution: string;
-    license: string;
-    caption: string | null;
-  }>;
-  /** Entities sharing at least one civilizational tag with this one. */
-  regionPeers: RegionPeer[];
-  primaryTag: string | null;
-  /**
-   * Closest neighbours by embedding cosine similarity. Surface this
-   * alongside the relationship and region peers — it tends to find
-   * conceptually adjacent entries that the Wikidata graph misses
-   * (e.g. "Mansa Musa" → "Sundiata Keïta" even without a P-property link).
-   */
-  similar: SimilarEntity[];
-  /**
-   * Most recent fact-check review for this entity, if any. Null when
-   * the entity has never been reviewed; otherwise the worker's status
-   * + flagged claims.
-   */
-  factCheck: FactCheckSummary | null;
-}
-
-const RELATED_CAP = 12;
-
-export async function getEntityBySlug(
-  slug: string,
-): Promise<EntityPageData | null> {
-  return withRetry("getEntityBySlug", () => getEntityBySlugInner(slug));
-}
-
-async function getEntityBySlugInner(
-  slug: string,
-): Promise<EntityPageData | null> {
-  const [entity] = await db
-    .select()
-    .from(entities)
-    .where(eq(entities.slug, slug))
-    .limit(1);
-
+export async function getEntityFull(slugOrId: string): Promise<EntityFull | null> {
+  const entity = await getEntityBySlugOrId(slugOrId);
   if (!entity) return null;
 
-  const aliasRows = await db
-    .select({ alias: entityAliases.alias, language: entityAliases.language })
-    .from(entityAliases)
-    .where(eq(entityAliases.entityQid, entity.qid));
-
-  // Outbound: this entity → others
-  const outbound = await db
-    .select({
-      predicate: relationships.predicate,
-      targetQid: relationships.targetQid,
-    })
-    .from(relationships)
-    .where(eq(relationships.sourceQid, entity.qid))
-    .limit(50);
-
-  // Inbound: others → this entity
-  const inbound = await db
-    .select({
-      predicate: relationships.predicate,
-      sourceQid: relationships.sourceQid,
-    })
-    .from(relationships)
-    .where(eq(relationships.targetQid, entity.qid))
-    .limit(50);
-
-  // Resolve target/source QIDs to entities in our DB
-  const candidateQids = Array.from(
-    new Set([
-      ...outbound.map((r) => r.targetQid),
-      ...inbound.map((r) => r.sourceQid),
-    ]),
-  );
-
-  const presentEntities =
-    candidateQids.length > 0
-      ? await db
-          .select()
-          .from(entities)
-          .where(inArray(entities.qid, candidateQids))
-      : [];
-  const presentMap = new Map(presentEntities.map((e) => [e.qid, e]));
-
-  const related: RelatedEntity[] = [];
-  for (const r of outbound) {
-    const e = presentMap.get(r.targetQid);
-    if (e)
-      related.push({ entity: e, predicate: r.predicate, direction: "outbound" });
-  }
-  for (const r of inbound) {
-    const e = presentMap.get(r.sourceQid);
-    if (e)
-      related.push({ entity: e, predicate: r.predicate, direction: "inbound" });
-  }
-
-  // Sort related: by target entity's tier (curated first), then by name.
-  related.sort((a, b) => {
-    if (b.entity.tier !== a.entity.tier) return b.entity.tier - a.entity.tier;
-    return a.entity.name.localeCompare(b.entity.name);
+  const [aliasRows, topicRows] = await withRetry("getEntityFullSides", async () => {
+    return await Promise.all([
+      db
+        .select({ alias: entityAliases.alias })
+        .from(entityAliases)
+        .where(eq(entityAliases.entityId, entity.id)),
+      db
+        .select({ topic: entityTopics.topic })
+        .from(entityTopics)
+        .where(eq(entityTopics.entityId, entity.id)),
+    ]);
   });
 
-  const orphanTargets: EntityPageData["orphanTargets"] = [];
-  for (const r of outbound) {
-    if (!presentMap.has(r.targetQid)) {
-      orphanTargets.push({ qid: r.targetQid, predicate: r.predicate });
-    }
-  }
-
-  const srcRows = await db
-    .select()
-    .from(sources)
-    .where(eq(sources.entityQid, entity.qid));
-
-  const mediaRows = await db
-    .select({
-      url: media.commonsUrl,
-      attribution: media.attribution,
-      license: media.license,
-      caption: media.caption,
-    })
-    .from(media)
-    .where(eq(media.entityQid, entity.qid))
-    .orderBy(asc(media.id));
-
-  // Civilizational tags for this entity → other entities sharing any tag.
-  const civTagsRows = await db
-    .select({ value: entityRegions.regionValue })
-    .from(entityRegions)
-    .where(
-      sql`${entityRegions.entityQid} = ${entity.qid} AND ${entityRegions.regionKind} = 'civilizational'`,
-    );
-  const civTags = civTagsRows.map((r) => r.value);
-  const primaryTag = civTags[0] ?? null;
-
-  let regionPeers: RegionPeer[] = [];
-  if (civTags.length > 0) {
-    // selectDistinct dedupes when an entity matches multiple civ tags.
-    const rows = await db
-      .selectDistinct({
-        qid: entities.qid,
-        slug: entities.slug,
-        name: entities.name,
-        type: entities.type,
-        tier: entities.tier,
-        dateStart: entities.dateStart,
-        dateStartPrecision: entities.dateStartPrecision,
-      })
-      .from(entities)
-      .innerJoin(entityRegions, eq(entityRegions.entityQid, entities.qid))
-      .where(
-        and(
-          eq(entityRegions.regionKind, "civilizational"),
-          inArray(entityRegions.regionValue, civTags),
-          ne(entities.qid, entity.qid),
-        ),
-      )
-      .orderBy(desc(entities.tier), asc(entities.dateStart))
-      .limit(8);
-
-    regionPeers = rows.map((r) => ({
-      qid: r.qid,
-      slug: r.slug,
-      name: r.name,
-      type: r.type,
-      dateStart: r.dateStart,
-      dateStartPrecision: r.dateStartPrecision,
-    }));
-  }
-
-  // Embedding-based "resonant" neighbours. Excludes the entity itself
-  // AND anything we already showed under Connections / More-from-region
-  // — those sections would otherwise duplicate names verbatim. Pull
-  // 20 from the ANN query so we have slack after de-dup.
-  const dedupQids = new Set<string>([
-    ...related.map((r) => r.entity.qid),
-    ...regionPeers.map((p) => p.qid),
-  ]);
-  let similar: SimilarEntity[] = [];
-  if (entity.embedding) {
-    type SimRow = {
-      qid: string;
-      slug: string;
-      name: string;
-      type: string;
-      tier: number;
-      date_start: number | null;
-      date_start_precision: string | null;
-      similarity: number;
-    };
-    const rows = await db.execute<SimRow>(sql`
-      WITH seed AS (
-        SELECT embedding FROM entities WHERE qid = ${entity.qid}
-      )
-      SELECT
-        e.qid, e.slug, e.name, e.type, e.tier,
-        e.date_start, e.date_start_precision,
-        1 - (e.embedding <=> seed.embedding) AS similarity
-      FROM entities e, seed
-      WHERE e.embedding IS NOT NULL AND e.qid <> ${entity.qid}
-      ORDER BY e.embedding <=> seed.embedding
-      LIMIT 20
-    `);
-    similar = Array.from(rows)
-      .filter((r) => !dedupQids.has(r.qid))
-      .slice(0, 6)
-      .map((r) => ({
-        qid: r.qid,
-        slug: r.slug,
-        name: r.name,
-        type: r.type,
-        tier: r.tier,
-        dateStart: r.date_start,
-        dateStartPrecision: r.date_start_precision,
-        similarity: r.similarity,
-      }));
-  }
-
-  // Latest fact-check review for this entity, if any. Re-runs supersede
-  // previous reviews; we only surface the most recent.
-  const [fcRow] = await db
-    .select({
-      status: factCheckReviews.status,
-      model: factCheckReviews.model,
-      createdAt: factCheckReviews.createdAt,
-      flaggedClaims: factCheckReviews.flaggedClaims,
-    })
-    .from(factCheckReviews)
-    .where(eq(factCheckReviews.entityQid, entity.qid))
-    .orderBy(desc(factCheckReviews.createdAt))
-    .limit(1);
-
-  const factCheck = fcRow
-    ? ({
-        status: fcRow.status as "clean" | "flagged" | "failed",
-        model: fcRow.model,
-        createdAt: fcRow.createdAt,
-        flaggedClaims: Array.isArray(fcRow.flaggedClaims)
-          ? (fcRow.flaggedClaims as FactCheckFinding[])
-          : [],
-      } satisfies FactCheckSummary)
-    : null;
-
   return {
-    entity,
-    aliases: aliasRows,
-    related: related.slice(0, RELATED_CAP),
-    orphanTargets: orphanTargets.slice(0, 12),
-    sources: srcRows,
-    media: mediaRows,
-    regionPeers,
-    primaryTag,
-    similar,
-    factCheck,
+    id: entity.id,
+    slug: entity.slug,
+    canonicalName: entity.canonicalName,
+    disambiguator: entity.disambiguator,
+    entityType: entity.entityType,
+    shortDescription: entity.shortDescription,
+    summary: entity.summary,
+    narrative: entity.narrative,
+    structuredFacts: (entity.structuredFacts as Record<string, unknown>) ?? {},
+    keyDates: (entity.keyDates as EntityFull["keyDates"]) ?? [],
+    coords: (entity.coords as EntityFull["coords"]) ?? null,
+    generatorModel: entity.generatorModel,
+    verifierModel: entity.verifierModel,
+    consensusScore: entity.consensusScore,
+    aliases: aliasRows.map((r) => r.alias),
+    topics: topicRows.map((r) => r.topic),
   };
 }
 
-export async function getAllEntitySlugs(limit = 200): Promise<
-  Array<{
-    slug: string;
-    name: string;
-    type: string;
-    tier: number;
-    dateStart: number | null;
-    dateEnd: number | null;
-  }>
-> {
-  return withRetry("getAllEntitySlugs", () =>
-    db
+export async function listByType(args: {
+  entityType: EntityType;
+  limit: number;
+  offset: number;
+}): Promise<EntityStub[]> {
+  return await withRetry("listByType", async () => {
+    return await db
+      .select(stubColumns)
+      .from(entities)
+      .where(
+        and(
+          eq(entities.entityType, args.entityType),
+          eq(entities.status, "published"),
+        ),
+      )
+      .orderBy(sql`${entities.canonicalName} ASC`)
+      .limit(args.limit)
+      .offset(args.offset);
+  });
+}
+
+export async function listByTopic(args: {
+  topic: string;
+  limit: number;
+  offset: number;
+}): Promise<EntityStub[]> {
+  return await withRetry("listByTopic", async () => {
+    return await db
+      .select(stubColumns)
+      .from(entities)
+      .innerJoin(entityTopics, eq(entityTopics.entityId, entities.id))
+      .where(
+        and(eq(entityTopics.topic, args.topic), eq(entities.status, "published")),
+      )
+      .orderBy(sql`${entities.canonicalName} ASC`)
+      .limit(args.limit)
+      .offset(args.offset);
+  });
+}
+
+export async function listByDateRange(args: {
+  yearStart: number;
+  yearEnd: number;
+  entityType?: EntityType;
+  limit: number;
+}): Promise<EntityStub[]> {
+  return await withRetry("listByDateRange", async () => {
+    const typeFilter = args.entityType
+      ? sql`AND ${entities.entityType} = ${args.entityType}`
+      : sql``;
+    const rows = await db.execute<{
+      id: string;
+      slug: string;
+      canonical_name: string;
+      entity_type: string;
+      short_description: string;
+      consensus_score: number;
+    }>(sql`
+      SELECT id, slug, canonical_name, entity_type, short_description, consensus_score
+      FROM entities, jsonb_array_elements(key_dates) AS kd
+      WHERE status = 'published'
+        AND (kd->>'year')::int BETWEEN ${args.yearStart} AND ${args.yearEnd}
+        ${typeFilter}
+      GROUP BY id
+      ORDER BY MIN((kd->>'year')::int) ASC
+      LIMIT ${args.limit}
+    `);
+    return rows.map((r) => ({
+      id: r.id,
+      slug: r.slug,
+      canonicalName: r.canonical_name,
+      entityType: r.entity_type,
+      shortDescription: r.short_description,
+      consensusScore: r.consensus_score,
+    }));
+  });
+}
+
+export async function getRelated(args: {
+  entityId: string;
+  predicate?: string;
+}): Promise<Array<{ predicate: string; entity: EntityStub }>> {
+  return await withRetry("getRelated", async () => {
+    const rows = await db
       .select({
-        slug: entities.slug,
-        name: entities.name,
-        type: entities.type,
-        tier: entities.tier,
-        dateStart: entities.dateStart,
-        dateEnd: entities.dateEnd,
+        predicate: entityRelationships.predicate,
+        entity: stubColumns,
+      })
+      .from(entityRelationships)
+      .innerJoin(entities, eq(entities.id, entityRelationships.targetId))
+      .where(
+        and(
+          eq(entityRelationships.sourceId, args.entityId),
+          args.predicate
+            ? eq(entityRelationships.predicate, args.predicate)
+            : sql`TRUE`,
+          eq(entities.status, "published"),
+        ),
+      )
+      .limit(50);
+    return rows;
+  });
+}
+
+export async function getCitations(entityId: string) {
+  return await withRetry("getCitations", async () => {
+    return await db
+      .select()
+      .from(entityClaimedCitations)
+      .where(eq(entityClaimedCitations.entityId, entityId));
+  });
+}
+
+export async function entitiesByIds(ids: string[]): Promise<EntityStub[]> {
+  if (!ids.length) return [];
+  return await withRetry("entitiesByIds", async () => {
+    return await db
+      .select(stubColumns)
+      .from(entities)
+      .where(and(inArray(entities.id, ids), eq(entities.status, "published")));
+  });
+}
+
+export async function typeCatalogCounts(): Promise<
+  Array<{ entityType: string; count: number }>
+> {
+  return await withRetry("typeCatalogCounts", async () => {
+    const rows = await db
+      .select({
+        entityType: entities.entityType,
+        count: sql<number>`count(*)::int`,
       })
       .from(entities)
-      .orderBy(sql`${entities.tier} DESC, ${entities.name} ASC`)
-      .limit(limit),
-  );
-}
-
-export interface FeaturedEntity {
-  qid: string;
-  slug: string;
-  name: string;
-  type: string;
-  tier: number;
-  dateStart: number | null;
-  dateEnd: number | null;
-  summary: string | null;
-  civTags: string[];
-  primaryTag: string | null;
-  era: string;
-}
-
-type FeaturedRow = {
-  qid: string;
-  slug: string;
-  name: string;
-  type: string;
-  tier: number;
-  date_start: number | null;
-  date_end: number | null;
-  summary: string | null;
-  civ_tags: string[];
-} & Record<string, unknown>;
-
-// eraFor: imported from lib/format below.
-
-/**
- * Featured rotation: round-robin pick from civilizational tags so no
- * region appears more than `maxPerRegion` times. Prefer higher-tier
- * entities within each region. Returns ~`count` items.
- *
- * Reads from `featured_cache` if populated and < 36h old; otherwise
- * falls back to live compute. The Vercel cron at
- * /api/cron/refresh-featured replaces the cache nightly.
- */
-export async function getFeaturedEntities(
-  count = 12,
-  maxPerRegion = 2,
-): Promise<FeaturedEntity[]> {
-  // Try cache first. The cron writes a row each night; we keep only the
-  // most recent and consider it fresh for ~36h (so the site stays warm
-  // even if one cron run is missed).
-  try {
-    const [cached] = await withRetry("featured:read", () =>
-      db
-        .select({
-          entities: featuredCache.entities,
-          createdAt: featuredCache.createdAt,
-        })
-        .from(featuredCache)
-        .orderBy(desc(featuredCache.createdAt))
-        .limit(1),
-    );
-    if (cached) {
-      const ageMs = Date.now() - cached.createdAt.getTime();
-      if (ageMs < 36 * 60 * 60 * 1000 && Array.isArray(cached.entities)) {
-        return cached.entities as FeaturedEntity[];
-      }
-    }
-  } catch {
-    // Cache read failed — proceed with live compute.
-  }
-  return computeFeaturedEntities(count, maxPerRegion);
-}
-
-/**
- * The actual rotation algorithm. Exported so the cron route can write
- * its result to the cache.
- */
-export async function computeFeaturedEntities(
-  count = 12,
-  maxPerRegion = 2,
-): Promise<FeaturedEntity[]> {
-  const rows = await withRetry("getFeaturedEntities", () =>
-    db.execute<FeaturedRow>(sql`
-      SELECT
-        e.qid,
-        e.slug,
-        e.name,
-        e.type,
-        e.tier,
-        e.date_start,
-        e.date_end,
-        e.summary,
-        COALESCE(
-          ARRAY_AGG(er.region_value) FILTER (WHERE er.region_kind = 'civilizational'),
-          ARRAY[]::varchar[]
-        ) AS civ_tags
-      FROM entities e
-      LEFT JOIN entity_regions er ON er.entity_qid = e.qid
-      WHERE e.tier >= 1
-      GROUP BY e.qid
-    `),
-  );
-
-  // Group by primary tag (first civ tag); fallback bucket for untagged.
-  const buckets = new Map<string, FeaturedEntity[]>();
-  for (const r of Array.from(rows)) {
-    const tags = r.civ_tags ?? [];
-    const primary = tags[0] ?? "uncategorised";
-    const e: FeaturedEntity = {
-      qid: r.qid,
-      slug: r.slug,
-      name: r.name,
-      type: r.type,
-      tier: r.tier,
-      dateStart: r.date_start,
-      dateEnd: r.date_end,
-      summary: r.summary,
-      civTags: tags,
-      primaryTag: tags[0] ?? null,
-      era: eraFor(r.date_start),
-    };
-    const arr = buckets.get(primary);
-    if (arr) arr.push(e);
-    else buckets.set(primary, [e]);
-  }
-  // Within each bucket: higher tier first, then alphabetical
-  for (const arr of buckets.values()) {
-    arr.sort(
-      (a, b) => b.tier - a.tier || a.name.localeCompare(b.name),
-    );
-  }
-  // Order buckets by size desc (so biggest civilizations contribute first)
-  // then alphabetical bucket name for stable ordering.
-  const bucketKeys = [...buckets.keys()].sort((a, b) => {
-    const sizeDiff = (buckets.get(b)?.length ?? 0) - (buckets.get(a)?.length ?? 0);
-    return sizeDiff !== 0 ? sizeDiff : a.localeCompare(b);
+      .where(eq(entities.status, "published"))
+      .groupBy(entities.entityType)
+      .orderBy(desc(sql`count(*)`));
+    return rows;
   });
+}
 
-  const featured: FeaturedEntity[] = [];
-  const seenPerRegion = new Map<string, number>();
-  let exhausted = false;
-  let pass = 0;
-  while (featured.length < count && !exhausted) {
-    exhausted = true;
-    for (const tag of bucketKeys) {
-      if (featured.length >= count) break;
-      const arr = buckets.get(tag);
-      if (!arr || pass >= arr.length) continue;
-      const used = seenPerRegion.get(tag) ?? 0;
-      if (used >= maxPerRegion) continue;
-      const candidate = arr[pass]!;
-      featured.push(candidate);
-      seenPerRegion.set(tag, used + 1);
-      exhausted = false;
-    }
-    pass += 1;
-  }
-  return featured;
+export async function findBySlugOrAlias(query: string): Promise<EntityStub | null> {
+  return await withRetry("findBySlugOrAlias", async () => {
+    const slug = query.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    const direct = await db
+      .select(stubColumns)
+      .from(entities)
+      .where(or(eq(entities.slug, slug), eq(entities.canonicalName, query)))
+      .limit(1);
+    if (direct[0]) return direct[0];
+    const aliased = await db
+      .select(stubColumns)
+      .from(entities)
+      .innerJoin(entityAliases, eq(entityAliases.entityId, entities.id))
+      .where(eq(entityAliases.alias, query))
+      .limit(1);
+    return aliased[0] ?? null;
+  });
 }

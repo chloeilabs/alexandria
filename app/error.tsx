@@ -1,13 +1,7 @@
 "use client";
 
-// Root-level error boundary. Any unhandled error in a server component
-// or in fetching falls through to this. Per Next.js convention, this
-// file must be a client component and accept the `reset` callback that
-// re-triggers the failed render.
-
 import { useEffect } from "react";
 import Link from "next/link";
-import { MonoLabel, Display } from "@/components/scriptorium/primitives";
 
 export default function GlobalError({
   error,
@@ -21,8 +15,9 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center px-6 text-center codex-paper">
+    <main className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
       <div
+        aria-hidden
         className="font-display"
         style={{
           fontSize: 28,
@@ -33,20 +28,20 @@ export default function GlobalError({
       >
         ❦
       </div>
-      <MonoLabel tone="accent" size={11} track="0.32em" className="block mb-4">
-        Erratum est
-      </MonoLabel>
-      <Display
-        size={56}
-        italic
+      <p className="font-mono text-[11px] uppercase tracking-[0.32em] text-accent mb-4">
+        Error
+      </p>
+      <h1
+        className="font-display italic"
         style={{
+          fontSize: 48,
           letterSpacing: "-0.015em",
           lineHeight: 1.04,
           maxWidth: 580,
         }}
       >
         The Library lost its place.
-      </Display>
+      </h1>
       <p
         className="font-display italic"
         style={{
@@ -57,19 +52,13 @@ export default function GlobalError({
           margin: "24px auto 0",
         }}
       >
-        Something failed while building this page. The error has been
-        logged. You can try again, or follow a thread elsewhere.
+        Something failed while building this page. The error has been logged.
       </p>
 
       {error.digest && (
-        <MonoLabel
-          size={10}
-          track="0.18em"
-          tone="muted"
-          className="block mt-6"
-        >
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mt-6">
           ref: {error.digest}
-        </MonoLabel>
+        </p>
       )}
 
       <div className="mt-10 flex items-baseline gap-8 flex-wrap justify-center">
@@ -85,12 +74,6 @@ export default function GlobalError({
           className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground hover:text-accent transition-colors focus:outline-none focus-visible:underline focus-visible:underline-offset-4"
         >
           Home
-        </Link>
-        <Link
-          href="/random"
-          className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground hover:text-accent transition-colors focus:outline-none focus-visible:underline focus-visible:underline-offset-4"
-        >
-          Random entry
         </Link>
       </div>
     </main>

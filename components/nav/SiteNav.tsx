@@ -1,19 +1,11 @@
 "use client";
 
-// Editorial top nav for the SCRIPTORIUM-themed site.
-// Two rows on desktop: the brand + nav links, and a thin sub-row of
-// live stats. Mobile collapses links behind a "menu" disclosure and
-// drops the stats row.
-
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
-// "/" focuses the on-page search input when one is present, or
-// navigates to /search and focuses there. Standard convention (GitHub,
-// Linear, Notion) for power users.
 function useSearchShortcut() {
   const router = useRouter();
   const pathname = usePathname();
@@ -21,8 +13,6 @@ function useSearchShortcut() {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
-      // Ignore when focus is in any text-entry surface — `/` is a
-      // legitimate character there.
       if (
         target &&
         (target.tagName === "INPUT" ||
@@ -48,13 +38,9 @@ function useSearchShortcut() {
 
 const LINKS: ReadonlyArray<{ href: string; label: string }> = [
   { href: "/search", label: "Search" },
-  { href: "/timeline", label: "Timeline" },
-  { href: "/map", label: "Map" },
-  { href: "/graph", label: "Graph" },
-  { href: "/thread", label: "Threads" },
-  { href: "/civilization", label: "Civilizations" },
-  { href: "/era", label: "Eras" },
-  { href: "/random", label: "Random" },
+  { href: "/browse", label: "Browse" },
+  { href: "/quality", label: "Quality" },
+  { href: "/about", label: "About" },
 ];
 
 export function SiteNav() {
@@ -67,15 +53,6 @@ export function SiteNav() {
       className="sticky top-0 z-40 w-full border-b backdrop-blur"
       style={{
         borderColor: "var(--color-border)",
-        // Use the elevated surface so the nav reads as a distinct
-        // layer above the page in both modes. The body background
-        // (vellum / deep ink) is the SAME tone as the body content,
-        // which made the dark-mode nav blend into the page.
-        // Mix in srgb, not oklch — mixing a chromatic colour with
-        // `transparent` in polar oklch drops the hue ("none"), which
-        // makes the nav read as a warm grey strip in dark mode even
-        // though the page bg is ink-blue. srgb mixing keeps the
-        // original colour at the requested alpha.
         background:
           "color-mix(in srgb, var(--color-background-elevated) 88%, transparent)",
       }}
@@ -90,10 +67,6 @@ export function SiteNav() {
             aria-hidden="true"
             className="not-italic group-hover:text-accent transition-colors"
             style={{
-              // Fleurons render smaller than the cap height of the
-              // wordmark, so we size up to ~1.15em and nudge a hair
-              // down to sit on the actual visual centre of "Alexandria"
-              // rather than its baseline-attached glyph centre.
               color: "var(--color-accent)",
               fontSize: "1.15em",
               lineHeight: 1,
@@ -142,7 +115,10 @@ export function SiteNav() {
               </li>
             );
           })}
-          <li className="pl-3 ml-3 border-l" style={{ borderColor: "var(--color-border)" }}>
+          <li
+            className="pl-3 ml-3 border-l"
+            style={{ borderColor: "var(--color-border)" }}
+          >
             <ThemeToggle />
           </li>
         </ul>

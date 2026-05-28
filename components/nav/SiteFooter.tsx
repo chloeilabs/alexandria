@@ -1,23 +1,12 @@
-// Editorial SCRIPTORIUM footer — colophon-style, restrained.
-// Centre: the ❦ glyph above the mast + tagline. Below: a three-row
-// run of editorial blocks (browse · sources · licence) over a thin
-// hairline. Closes with year + repo link.
-
 import Link from "next/link";
-import { APP_DESCRIPTION } from "@/lib/site";
-import { Ornament } from "@/components/scriptorium/Ornament";
 
 const YEAR_BUILT = "2026";
 
 const BROWSE = [
-  { href: "/thread", label: "Threads" },
-  { href: "/civilization", label: "Civilizations" },
-  { href: "/era", label: "Eras" },
-  { href: "/timeline", label: "Timeline" },
-  { href: "/map", label: "Map" },
-  { href: "/graph", label: "Graph" },
-  { href: "/random", label: "Random entry" },
-  { href: "/about", label: "About" },
+  { href: "/search", label: "Search" },
+  { href: "/browse", label: "Browse by type" },
+  { href: "/quality", label: "Quality dashboard" },
+  { href: "/about", label: "About / methodology" },
 ];
 
 export function SiteFooter() {
@@ -33,11 +22,18 @@ export function SiteFooter() {
     >
       <div className="max-w-5xl mx-auto px-6 py-14">
         <div className="text-center mb-12">
-          <Ornament
-            maxWidth={280}
-            hollowFill="var(--color-background-elevated)"
-            style={{ marginBottom: 18 }}
-          />
+          <div
+            aria-hidden
+            className="font-display"
+            style={{
+              fontSize: 28,
+              color: "var(--color-accent)",
+              letterSpacing: "0.6em",
+              marginBottom: 18,
+            }}
+          >
+            ❦
+          </div>
           <Link
             href="/"
             className="font-display italic hover:text-accent transition-colors focus:outline-none focus-visible:underline focus-visible:underline-offset-4"
@@ -55,10 +51,11 @@ export function SiteFooter() {
               fontSize: 16,
               lineHeight: 1.55,
               color: "var(--color-muted-foreground)",
-              maxWidth: 480,
+              maxWidth: 520,
             }}
           >
-            {APP_DESCRIPTION} Begin anywhere; follow the threads.
+            An AI-distilled knowledge base. Designed for AI tool calling;
+            readable by humans.
           </p>
         </div>
 
@@ -83,60 +80,7 @@ export function SiteFooter() {
 
           <div>
             <h2 className="font-mono text-[10px] uppercase tracking-[0.24em] text-accent mb-4">
-              ¶ Sources &amp; licensing
-            </h2>
-            <ul className="space-y-2 font-display text-[15px] text-muted-foreground leading-relaxed">
-              <li>
-                Adapted prose from{" "}
-                <a
-                  href="https://en.wikipedia.org/wiki/Wikipedia:About"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="text-accent/80 hover:text-accent transition-colors underline decoration-dotted underline-offset-2"
-                >
-                  Wikipedia
-                </a>{" "}
-                under{" "}
-                <a
-                  href="https://creativecommons.org/licenses/by-sa/4.0/"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="text-accent/80 hover:text-accent transition-colors underline decoration-dotted underline-offset-2"
-                >
-                  CC BY-SA 4.0
-                </a>
-                .
-              </li>
-              <li>
-                1911{" "}
-                <a
-                  href="https://en.wikisource.org/wiki/1911_Encyclop%C3%A6dia_Britannica"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="text-accent/80 hover:text-accent transition-colors underline decoration-dotted underline-offset-2"
-                >
-                  Encyclopædia Britannica
-                </a>{" "}
-                — public domain in the United States.
-              </li>
-              <li>
-                Imagery via{" "}
-                <a
-                  href="https://commons.wikimedia.org/"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="text-accent/80 hover:text-accent transition-colors underline decoration-dotted underline-offset-2"
-                >
-                  Wikimedia Commons
-                </a>
-                ; per-image attribution on each entry.
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h2 className="font-mono text-[10px] uppercase tracking-[0.24em] text-accent mb-4">
-              ¶ Colophon
+              ¶ Provenance
             </h2>
             <p
               className="font-display italic"
@@ -146,27 +90,41 @@ export function SiteFooter() {
                 color: "var(--color-muted-foreground)",
               }}
             >
-              Set in EB Garamond and JetBrains Mono. Built on Next.js 16
-              + Postgres 17 with pgvector + Drizzle ORM, deployed to
-              Vercel atop a Neon Postgres branch.
+              Every entry is AI-distilled. Citations are LLM-claimed and{" "}
+              <em>not</em> externally verified. See{" "}
+              <Link
+                href="/about"
+                className="text-accent/80 hover:text-accent transition-colors underline decoration-dotted underline-offset-2"
+              >
+                methodology
+              </Link>
+              .
             </p>
+          </div>
+
+          <div>
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.24em] text-accent mb-4">
+              ¶ For AI agents
+            </h2>
             <p
-              className="font-display mt-3"
+              className="font-display italic"
               style={{
                 fontSize: 15,
+                lineHeight: 1.55,
                 color: "var(--color-muted-foreground)",
               }}
             >
-              Source at{" "}
-              <a
-                href="https://github.com/chloeilabs/alexandria"
-                target="_blank"
-                rel="noreferrer noopener"
-                className="text-accent/80 hover:text-accent transition-colors underline decoration-dotted underline-offset-2"
+              MCP endpoint at{" "}
+              <code
+                className="font-mono"
+                style={{
+                  fontSize: 13,
+                  color: "var(--color-foreground)",
+                }}
               >
-                github.com/chloeilabs/alexandria
-              </a>
-              .
+                /api/mcp
+              </code>
+              . Configure as a Streamable-HTTP MCP server.
             </p>
           </div>
         </div>
@@ -188,7 +146,7 @@ export function SiteFooter() {
               opacity: 0.7,
             }}
           >
-            Explicit colophon · {YEAR_BUILT}
+            Built {YEAR_BUILT}
           </span>
         </div>
       </div>

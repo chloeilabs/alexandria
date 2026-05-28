@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { MonoLabel, Display } from "@/components/scriptorium/primitives";
 
 export default function NotFound() {
   return (
-    <main className="min-h-[calc(100vh-3rem)] flex items-center justify-center px-6 codex-paper">
+    <main className="min-h-[calc(100vh-3rem)] flex items-center justify-center px-6">
       <div className="text-center max-w-lg">
         <div
+          aria-hidden
           className="font-display"
           style={{
             fontSize: 28,
@@ -16,16 +16,19 @@ export default function NotFound() {
         >
           ❦
         </div>
-        <MonoLabel tone="accent" size={11} track="0.32em" className="block mb-4">
-          IV · 404 · perditus
-        </MonoLabel>
-        <Display
-          size={56}
-          italic
-          style={{ letterSpacing: "-0.015em", lineHeight: 1.04 }}
+        <p className="font-mono text-[11px] uppercase tracking-[0.32em] text-accent mb-4">
+          404 · Not found
+        </p>
+        <h1
+          className="font-display italic"
+          style={{
+            fontSize: 48,
+            letterSpacing: "-0.015em",
+            lineHeight: 1.04,
+          }}
         >
           The Library is silent here.
-        </Display>
+        </h1>
         <p
           className="font-display italic mt-6"
           style={{
@@ -35,8 +38,7 @@ export default function NotFound() {
             margin: "24px 0 32px",
           }}
         >
-          This entry has not yet been written, or you took a wrong turn
-          in the stacks. Begin again from the index.
+          This entry has not been generated, or you took a wrong turn.
         </p>
         <div className="flex items-baseline gap-8 flex-wrap justify-center">
           <Link
@@ -46,10 +48,10 @@ export default function NotFound() {
             Return to the Library
           </Link>
           <Link
-            href="/random"
+            href="/search"
             className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground hover:text-accent transition-colors"
           >
-            Random entry →
+            Search →
           </Link>
         </div>
       </div>
