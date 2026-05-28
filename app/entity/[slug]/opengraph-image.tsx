@@ -79,12 +79,12 @@ export default async function OG({ params }: { params: Promise<{ slug: string }>
             marginBottom: 24,
           }}
         >
-          <div>¶ {entity.entityType}</div>
+          <div style={{ display: "flex" }}>¶ {entity.entityType}</div>
           {entity.disambiguator ? (
-            <>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
               <div style={{ opacity: 0.6 }}>·</div>
               <div style={{ opacity: 0.8 }}>{entity.disambiguator}</div>
-            </>
+            </div>
           ) : null}
         </div>
 
@@ -99,6 +99,7 @@ export default async function OG({ params }: { params: Promise<{ slug: string }>
         >
           <div
             style={{
+              display: "flex",
               fontSize: 96,
               fontStyle: "italic",
               lineHeight: 1.05,
@@ -110,6 +111,7 @@ export default async function OG({ params }: { params: Promise<{ slug: string }>
           {desc ? (
             <div
               style={{
+                display: "flex",
                 fontSize: 32,
                 fontStyle: "italic",
                 lineHeight: 1.35,
