@@ -9,10 +9,22 @@ import { embed as aiEmbed, generateObject, generateText } from "ai";
 import { gateway } from "@ai-sdk/gateway";
 import type { z } from "zod";
 
-import { MODEL_EMBED, MODEL_FLASH } from "./index";
+import {
+  MODEL_CLAUDE_HAIKU,
+  MODEL_DEEPSEEK_V4_PRO,
+  MODEL_EMBED,
+} from "./index";
 
-export const DEFAULT_GENERATOR = MODEL_FLASH;
-export const DEFAULT_VERIFIER = MODEL_FLASH;
+// Generator and verifier are intentionally from different model families.
+// Same-model verification (Gemini × Gemini, Grok × Grok, etc.) is sampling
+// variance, not real consensus — the verifier inherits the generator's
+// blind spots. DeepSeek V4 Pro (MoE, DeepSeek training) generates;
+// Claude Haiku 4.5 (Anthropic RLHF, hedges/flags uncertainty more
+// readily) verifies. Disagreements caught by the verifier therefore
+// reflect cross-family disagreement, which is what `consensus_score`
+// is supposed to measure.
+export const DEFAULT_GENERATOR = MODEL_DEEPSEEK_V4_PRO;
+export const DEFAULT_VERIFIER = MODEL_CLAUDE_HAIKU;
 
 export interface GenerateObjectUsage {
   promptTokens: number;
