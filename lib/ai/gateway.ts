@@ -1,11 +1,8 @@
 // Thin wrappers around the Vercel AI SDK.
 //
-// All calls route through the AI Gateway. With AI_GATEWAY_API_KEY set,
-// passing a plain string model id ("google/gemini-3.5-flash") to
-// generateObject/generateText is enough — no provider import.
-//
-// For embeddings we use the typed gateway provider so the model id is
-// checked at the type level.
+// All calls route through the AI Gateway. AI SDK v6 requires the
+// `gateway(...)` provider wrapper to be explicit — plain string model ids
+// no longer auto-route reliably even with AI_GATEWAY_API_KEY set.
 
 import "../env";
 import { embed as aiEmbed, generateObject, generateText } from "ai";
@@ -31,7 +28,7 @@ export async function generateStructured<T>(args: {
 }): Promise<{ object: T; usage: GenerateObjectUsage; model: string }> {
   const model = args.model ?? DEFAULT_GENERATOR;
   const result = await generateObject({
-    model,
+    model: gateway(model),
     schema: args.schema,
     prompt: args.prompt,
     system: args.system,
@@ -55,7 +52,7 @@ export async function generatePlainText(args: {
 }): Promise<{ text: string; usage: GenerateObjectUsage; model: string }> {
   const model = args.model ?? DEFAULT_GENERATOR;
   const result = await generateText({
-    model,
+    model: gateway(model),
     prompt: args.prompt,
     system: args.system,
     temperature: args.temperature ?? 0.4,
