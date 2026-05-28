@@ -1,466 +1,307 @@
-import { sql, type SQL } from "drizzle-orm";
+// Drizzle schema for the AI-distilled knowledge base.
+//
+// The corpus is heterogeneous (person, place, event, concept, …) so the
+// shape is one wide table with type-tagged rows, plus side tables for
+// 1-to-N data (aliases, relationships, citations, topics) and pipeline
+// bookkeeping (generation_runs, review_queue, seed_topics,
+// featured_rotation).
+//
+// Extensions installed by scripts/init-db.sql: vector, pg_trgm, citext.
+
+import { sql } from "drizzle-orm";
 import {
-  bigint,
+  bigserial,
+  boolean,
   customType,
+  date,
   index,
   integer,
   jsonb,
   numeric,
   pgTable,
   real,
-  serial,
   smallint,
   text,
   timestamp,
   uniqueIndex,
+  uuid,
   varchar,
-  vector,
 } from "drizzle-orm/pg-core";
 
-// ---------------------------------------------------------------------------
-// Custom types
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// Custom types (pgvector + citext + tsvector + uuid[])
+// ---------------------------------------------------------------------
 
-// citext: case-insensitive text. Postgres extension enabled in init-db.sql.
-const citext = customType<{ data: string; notNull: true }>({
-  dataType() {
-    return "citext";
-  },
-});
+const vector = (name: string, dim: number) =>
+  customType<{ data: number[]; driverData: string }>({
+    dataType() {
+      return `vector(${dim})`;
+    },
+    toDriver(value) {
+      return `[${value.join(",")}]`;
+    },
+    fromDriver(value) {
+      return JSON.parse(value as string);
+    },
+  })(name);
 
-// tsvector: generated full-text search column. Indexed with GIN below.
-const tsvector = customType<{ data: string }>({
-  dataType() {
-    return "tsvector";
-  },
-});
+const citext = (name: string) =>
+  customType<{ data: string }>({
+    dataType() {
+      return "citext";
+    },
+  })(name);
 
-// ---------------------------------------------------------------------------
-// Core: entities
-// ---------------------------------------------------------------------------
+const tsvector = (name: string) =>
+  customType<{ data: string }>({
+    dataType() {
+      return "tsvector";
+    },
+  })(name);
+
+const uuidArray = (name: string) =>
+  customType<{ data: string[]; driverData: string }>({
+    dataType() {
+      return "uuid[]";
+    },
+    toDriver(value) {
+      return `{${value.join(",")}}`;
+    },
+  })(name);
+
+// ---------------------------------------------------------------------
+// Enums kept as varchar (looser than pg enums; extend without ALTER TYPE)
+// ---------------------------------------------------------------------
+
+export const ENTITY_TYPES = [
+  "person",
+  "place",
+  "event",
+  "concept",
+  "work",
+  "organization",
+  "species",
+  "artifact",
+  "other",
+] as const;
+export type EntityType = (typeof ENTITY_TYPES)[number];
+
+export const ENTITY_STATUSES = [
+  "draft",
+  "verified",
+  "flagged",
+  "published",
+] as const;
+export type EntityStatus = (typeof ENTITY_STATUSES)[number];
+
+// ---------------------------------------------------------------------
+// entities — heterogeneous entries, AI-synthesized
+// ---------------------------------------------------------------------
 
 export const entities = pgTable(
   "entities",
   {
-    // Wikidata QID is the canonical key. URL slug is derived but separate.
-    qid: varchar("qid", { length: 32 }).primaryKey(),
-    slug: citext("slug").notNull().unique(),
-    name: text("name").notNull(),
-    // person | place | event | organization | work | concept
-    type: varchar("type", { length: 24 }).notNull(),
-    // 0 = stub, 1 = summary, 2 = narrative, 3 = curated
-    tier: smallint("tier").notNull().default(0),
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: citext("slug").notNull(),
+    canonicalName: text("canonical_name").notNull(),
+    disambiguator: text("disambiguator"),
+    entityType: varchar("entity_type", { length: 24 }).notNull(),
+    status: varchar("status", { length: 16 }).notNull().default("draft"),
 
-    // Dates: year integer (negative = BCE). Precision distinguishes
-    // "exact year" from "decade" / "century" / "millennium" for rendering.
-    dateStart: integer("date_start"),
-    dateStartPrecision: varchar("date_start_precision", { length: 16 }),
-    dateEnd: integer("date_end"),
-    dateEndPrecision: varchar("date_end_precision", { length: 16 }),
+    shortDescription: text("short_description").notNull(),
+    summary: text("summary").notNull(),
+    narrative: text("narrative").notNull(),
+    structuredFacts: jsonb("structured_facts").notNull().default({}),
+    keyDates: jsonb("key_dates").notNull().default([]),
+    coords: jsonb("coords"),
 
-    // Geography: plain float4/real columns. MapLibre handles rendering — we
-    // don't need PostGIS for the queries we run. See DECISIONS.md.
-    latitude: real("latitude"),
-    longitude: real("longitude"),
+    generatorModel: varchar("generator_model", { length: 64 }).notNull(),
+    verifierModel: varchar("verifier_model", { length: 64 }),
+    consensusScore: real("consensus_score").notNull().default(0),
+    disagreementNotes: jsonb("disagreement_notes").notNull().default([]),
 
-    // Tiered content
-    summary: text("summary"), // Tier 1+
-    narrative: text("narrative"), // Tier 2+
-    sourceAttribution: jsonb("source_attribution"), // Array<{kind, url, license}>
+    embedding: vector("embedding", 1024),
+    searchText: tsvector("search_text"),
 
-    // Search
-    embedding: vector("embedding", { dimensions: 1024 }),
-    searchText: tsvector("search_text").generatedAlwaysAs(
-      (): SQL =>
-        sql`to_tsvector('english', coalesce(${entities.name}, '') || ' ' || coalesce(${entities.summary}, ''))`,
-    ),
-
-    // Priority signals for the pg-boss upgrade queue
-    inboundLinkCount: integer("inbound_link_count").notNull().default(0),
-
-    // Captured from the Wikidata dump for clean Wikipedia title matching
-    // (DECISIONS.md 2026-05-24: unique-name matching loses ~3.8% to label
-    // collisions; sitelinks.enwiki.title gives a 1:1 join). Total sitelink
-    // count is a coarse notability signal usable alongside inbound_link_count.
-    enwikiTitle: text("enwiki_title"),
-    sitelinkCount: integer("sitelink_count").notNull().default(0),
-
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
-    tierUpgradedAt: timestamp("tier_upgraded_at", { withTimezone: true }),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
   },
   (t) => [
-    index("entities_type_idx").on(t.type),
-    index("entities_date_start_idx").on(t.dateStart),
-    index("entities_tier_idx").on(t.tier),
-    index("entities_inbound_links_idx").on(t.inboundLinkCount),
-    index("entities_search_text_idx").using("gin", t.searchText),
-    // Embedding index is built in a manual follow-up migration after seed:
-    // CREATE INDEX entities_embedding_idx ON entities USING hnsw
-    //   (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
-    // During seed we use IVFFLAT for fast inserts. See DECISIONS.md.
+    uniqueIndex("entities_slug_unique").on(t.slug),
+    index("entities_type_idx").on(t.entityType),
+    index("entities_status_idx").on(t.status),
+    index("entities_published_idx").on(t.publishedAt),
   ],
 );
 
-// ---------------------------------------------------------------------------
-// Aliases — multilingual labels for search and disambiguation
-// ---------------------------------------------------------------------------
+export type Entity = typeof entities.$inferSelect;
+export type NewEntity = typeof entities.$inferInsert;
+
+// ---------------------------------------------------------------------
+// entity_aliases
+// ---------------------------------------------------------------------
 
 export const entityAliases = pgTable(
   "entity_aliases",
   {
-    id: serial("id").primaryKey(),
-    entityQid: varchar("entity_qid", { length: 32 })
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    entityId: uuid("entity_id")
       .notNull()
-      .references(() => entities.qid, { onDelete: "cascade" }),
+      .references(() => entities.id, { onDelete: "cascade" }),
     alias: citext("alias").notNull(),
-    language: varchar("language", { length: 16 }).notNull(),
   },
-  (t) => [
-    index("entity_aliases_entity_idx").on(t.entityQid),
-    index("entity_aliases_alias_idx").on(t.alias),
-    uniqueIndex("entity_aliases_unique").on(t.entityQid, t.alias, t.language),
-  ],
+  (t) => [uniqueIndex("entity_aliases_unique").on(t.entityId, t.alias)],
 );
 
-// ---------------------------------------------------------------------------
-// Regions — hybrid taxonomy: UN subregion + civilizational tag + era_region
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// entity_relationships
+// ---------------------------------------------------------------------
 
-export const entityRegions = pgTable(
-  "entity_regions",
+export const entityRelationships = pgTable(
+  "entity_relationships",
   {
-    id: serial("id").primaryKey(),
-    entityQid: varchar("entity_qid", { length: 32 })
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    sourceId: uuid("source_id")
       .notNull()
-      .references(() => entities.qid, { onDelete: "cascade" }),
-    // un_subregion | civilizational | era_region
-    regionKind: varchar("region_kind", { length: 24 }).notNull(),
-    regionValue: varchar("region_value", { length: 64 }).notNull(),
+      .references(() => entities.id, { onDelete: "cascade" }),
+    targetId: uuid("target_id")
+      .notNull()
+      .references(() => entities.id, { onDelete: "cascade" }),
+    predicate: varchar("predicate", { length: 64 }).notNull(),
+    qualifiers: jsonb("qualifiers").notNull().default({}),
   },
   (t) => [
-    index("entity_regions_lookup_idx").on(t.regionKind, t.regionValue),
-    index("entity_regions_entity_idx").on(t.entityQid),
-    uniqueIndex("entity_regions_unique").on(
-      t.entityQid,
-      t.regionKind,
-      t.regionValue,
-    ),
+    uniqueIndex("entity_rel_unique").on(t.sourceId, t.targetId, t.predicate),
+    index("entity_rel_target_idx").on(t.targetId, t.predicate),
+    index("entity_rel_source_idx").on(t.sourceId, t.predicate),
   ],
 );
 
-// ---------------------------------------------------------------------------
-// Relationships — the connection graph
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// entity_claimed_citations — LLM-claimed, NOT externally verified
+// ---------------------------------------------------------------------
 
-export const relationships = pgTable(
-  "relationships",
+export const entityClaimedCitations = pgTable(
+  "entity_claimed_citations",
   {
-    id: serial("id").primaryKey(),
-    sourceQid: varchar("source_qid", { length: 32 })
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    entityId: uuid("entity_id")
       .notNull()
-      .references(() => entities.qid, { onDelete: "cascade" }),
-    // No FK on target_qid: during bulk seed, the target entity may not have
-    // been ingested yet (or may have been filtered out by the seed filter).
-    // Orphan relationships are tolerated; a periodic worker cleans them up.
-    targetQid: varchar("target_qid", { length: 32 }).notNull(),
-    // Wikidata property: P22 (father), P39 (position-held), P361 (part-of), ...
-    predicate: varchar("predicate", { length: 16 }).notNull(),
-    // Time-bounded relationships and other qualifiers
-    qualifiers: jsonb("qualifiers"),
+      .references(() => entities.id, { onDelete: "cascade" }),
+    claimExcerpt: text("claim_excerpt").notNull(),
+    claimedSource: text("claimed_source").notNull(),
+    claimedUrl: text("claimed_url"),
+    claimedAuthor: text("claimed_author"),
+    claimKind: varchar("claim_kind", { length: 16 }).notNull().default("other"),
+    verifiedBySecondModel: boolean("verified_by_second_model")
+      .notNull()
+      .default(false),
   },
-  (t) => [
-    index("relationships_source_idx").on(t.sourceQid),
-    index("relationships_target_idx").on(t.targetQid),
-    index("relationships_predicate_idx").on(t.predicate),
-    uniqueIndex("relationships_unique").on(
-      t.sourceQid,
-      t.targetQid,
-      t.predicate,
-    ),
-  ],
+  (t) => [index("entity_citations_entity_idx").on(t.entityId)],
 );
 
-// ---------------------------------------------------------------------------
-// Media — public-domain only, cached locally
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// entity_topics — flat, free-form tag clusters
+// ---------------------------------------------------------------------
 
-export const media = pgTable(
-  "media",
+export const entityTopics = pgTable(
+  "entity_topics",
   {
-    id: serial("id").primaryKey(),
-    entityQid: varchar("entity_qid", { length: 32 })
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    entityId: uuid("entity_id")
       .notNull()
-      .references(() => entities.qid, { onDelete: "cascade" }),
-    commonsUrl: text("commons_url").notNull(),
-    localPath: text("local_path"),
-    // image | map | document | audio
-    kind: varchar("kind", { length: 24 }).notNull(),
-    license: varchar("license", { length: 64 }).notNull(),
-    attribution: text("attribution").notNull(),
-    caption: text("caption"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+      .references(() => entities.id, { onDelete: "cascade" }),
+    topic: citext("topic").notNull(),
   },
   (t) => [
-    index("media_entity_idx").on(t.entityQid),
-    // Composite unique: allow the same Commons file on multiple entities
-    // (DECISIONS.md 2026-05-24 — shared hero imagery was silently dropped
-    // on the second insert). Still prevents duplicate (entity, url) pairs.
-    uniqueIndex("media_entity_commons_unique").on(t.entityQid, t.commonsUrl),
+    uniqueIndex("entity_topics_unique").on(t.entityId, t.topic),
+    index("entity_topics_topic_idx").on(t.topic),
   ],
 );
 
-// ---------------------------------------------------------------------------
-// Sources — raw source text used to generate Tier 1+ narratives
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// generation_runs — pipeline bookkeeping; budget cap reads from this
+// ---------------------------------------------------------------------
 
-export const sources = pgTable(
-  "sources",
-  {
-    id: serial("id").primaryKey(),
-    entityQid: varchar("entity_qid", { length: 32 })
-      .notNull()
-      .references(() => entities.qid, { onDelete: "cascade" }),
-    // wikipedia | britannica_1911 | sep | own | ...
-    sourceKind: varchar("source_kind", { length: 32 }).notNull(),
-    url: text("url"),
-    content: text("content").notNull(),
-    license: varchar("license", { length: 64 }).notNull(),
-    retrievedAt: timestamp("retrieved_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [
-    index("sources_entity_idx").on(t.entityQid),
-    index("sources_kind_idx").on(t.sourceKind),
-    uniqueIndex("sources_entity_kind_unique").on(t.entityQid, t.sourceKind),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Pipeline runs — every API call accumulates cost here for the daily cap
-// ---------------------------------------------------------------------------
-
-export const pipelineRuns = pgTable(
-  "pipeline_runs",
-  {
-    id: serial("id").primaryKey(),
-    jobKind: varchar("job_kind", { length: 48 }).notNull(),
-    startedAt: timestamp("started_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    finishedAt: timestamp("finished_at", { withTimezone: true }),
-    entitiesProcessed: integer("entities_processed").notNull().default(0),
-    apiCostUsd: numeric("api_cost_usd", { precision: 12, scale: 6 })
-      .notNull()
-      .default("0"),
-    // running | completed | failed | budget_exceeded
-    status: varchar("status", { length: 24 }).notNull().default("running"),
-    errorMessage: text("error_message"),
-  },
-  (t) => [
-    index("pipeline_runs_started_idx").on(t.startedAt),
-    index("pipeline_runs_status_idx").on(t.status),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Pipeline checkpoints — resume bulk dumps after crash
-// ---------------------------------------------------------------------------
-
-export const pipelineCheckpoints = pgTable("pipeline_checkpoints", {
-  // wikidata_dump | wikipedia_dump | civilization_tagging | ...
-  kind: varchar("kind", { length: 48 }).primaryKey(),
-  lastProcessedQid: varchar("last_processed_qid", { length: 32 }),
-  byteOffset: bigint("byte_offset", { mode: "bigint" }),
-  entitiesCount: integer("entities_count").notNull().default(0),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
+export const generationRuns = pgTable("generation_runs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  entityId: uuid("entity_id").references(() => entities.id, {
+    onDelete: "set null",
+  }),
+  seedTopicId: integer("seed_topic_id"),
+  jobKind: varchar("job_kind", { length: 24 }).notNull(),
+  model: varchar("model", { length: 64 }).notNull(),
+  promptTokens: integer("prompt_tokens").notNull().default(0),
+  completionTokens: integer("completion_tokens").notNull().default(0),
+  apiCostUsd: numeric("api_cost_usd", { precision: 12, scale: 6 })
+    .notNull()
+    .default("0"),
+  status: varchar("status", { length: 24 }).notNull().default("running"),
+  error: text("error"),
+  startedAt: timestamp("started_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
 });
 
-// ---------------------------------------------------------------------------
-// Region taxonomy — configuration tables
-// ---------------------------------------------------------------------------
+export type GenerationRun = typeof generationRuns.$inferSelect;
 
-export const civilizationalTags = pgTable("civilizational_tags", {
-  id: serial("id").primaryKey(),
-  slug: varchar("slug", { length: 64 }).notNull().unique(),
-  label: text("label").notNull(),
-  description: text("description"),
-  parentId: integer("parent_id"),
-});
+// ---------------------------------------------------------------------
+// review_queue — flagged-for-human-review items
+// ---------------------------------------------------------------------
 
-export const unSubregions = pgTable("un_subregions", {
-  // UN M.49 code (e.g., "017" Middle Africa, "143" Central Asia)
-  code: varchar("code", { length: 8 }).primaryKey(),
-  name: text("name").notNull(),
-  // Containing UN region code (e.g., "002" Africa)
-  regionCode: varchar("region_code", { length: 8 }).notNull(),
-});
-
-// ---------------------------------------------------------------------------
-// Threads — curated paths through 5-10 entities. Editorial layer.
-// ---------------------------------------------------------------------------
-
-export const threads = pgTable(
-  "threads",
-  {
-    id: serial("id").primaryKey(),
-    slug: citext("slug").notNull().unique(),
-    title: text("title").notNull(),
-    /** One-line subtitle shown in lists. */
-    blurb: text("blurb"),
-    /** Long-form intro paragraph rendered above the entity sequence. */
-    intro: text("intro"),
-    /** Featured = surfaced on the homepage. At most one at a time. */
-    featured: integer("featured").notNull().default(0),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [index("threads_featured_idx").on(t.featured)],
-);
-
-export const threadEntries = pgTable(
-  "thread_entries",
-  {
-    id: serial("id").primaryKey(),
-    threadId: integer("thread_id")
-      .notNull()
-      .references(() => threads.id, { onDelete: "cascade" }),
-    entityQid: varchar("entity_qid", { length: 32 })
-      .notNull()
-      .references(() => entities.qid, { onDelete: "cascade" }),
-    /** Position in the thread (0-indexed). */
-    position: integer("position").notNull(),
-    /** Optional editorial note bridging from the previous entry to this one. */
-    note: text("note"),
-  },
-  (t) => [
-    index("thread_entries_thread_idx").on(t.threadId),
-    uniqueIndex("thread_entries_position_unique").on(t.threadId, t.position),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Fact-check reviews — the plan's "tier_2_review" surface.
-// ---------------------------------------------------------------------------
-//
-// One row per (entity × model × run). A fresh fact-check supersedes the
-// previous one; we keep history for audit but the entity page reads the
-// most recent.
-
-export const factCheckReviews = pgTable(
-  "fact_check_reviews",
-  {
-    id: serial("id").primaryKey(),
-    entityQid: varchar("entity_qid", { length: 32 })
-      .notNull()
-      .references(() => entities.qid, { onDelete: "cascade" }),
-    /** "google/gemini-3.5-flash" etc. */
-    model: varchar("model", { length: 64 }).notNull(),
-    /** "clean" = no findings; "flagged" = findings present; "failed" = error. */
-    status: varchar("status", { length: 16 }).notNull(),
-    /** [{claim, reason, source_excerpt?}] — see lib/ai/prompts/fact-check.ts */
-    flaggedClaims: jsonb("flagged_claims"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [
-    index("fact_check_reviews_entity_idx").on(t.entityQid),
-    index("fact_check_reviews_status_idx").on(t.status),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Featured cache — pre-computed homepage rotation, refreshed by Vercel cron.
-// ---------------------------------------------------------------------------
-//
-// A single-row table (we only ever care about the latest). The Vercel cron
-// endpoint at /api/cron/refresh-featured replaces this row with a fresh
-// featured set; getFeaturedEntities reads it back. Falls back to live
-// compute if the cache is missing or older than 36h.
-
-export const featuredCache = pgTable("featured_cache", {
-  id: serial("id").primaryKey(),
-  /** Array of FeaturedEntity objects — see lib/db/queries/entity.ts */
-  entities: jsonb("entities").notNull(),
-  /** Inputs used to generate this rotation, for debugging. */
-  meta: jsonb("meta"),
+export const reviewQueue = pgTable("review_queue", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  entityId: uuid("entity_id")
+    .notNull()
+    .references(() => entities.id, { onDelete: "cascade" }),
+  reason: varchar("reason", { length: 64 }).notNull(),
+  severity: smallint("severity").notNull().default(1),
+  disagreementJsonb: jsonb("disagreement_jsonb").notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  resolvedBy: text("resolved_by"),
+  resolution: varchar("resolution", { length: 32 }),
 });
 
-// ---------------------------------------------------------------------------
-// Enrichment priority — audit-driven Tier 1/2 work queue.
-// ---------------------------------------------------------------------------
-//
-// Written by pipeline/audit/coverage-report.ts. Read by the Phase 2/3
-// queue-build scripts (queue-tier1-batch.ts, queue-tier2-priority.ts).
-// One row per (civilizational_tag × entity × target_tier). deficit_score
-// reflects how thin the civ is vs the median (max(0, median - civ_n));
-// rank_in_bucket orders entities within a civ-bucket by inbound-link
-// centrality. The queue-build scripts apply per-civ quotas on top.
+// ---------------------------------------------------------------------
+// seed_topics — the corpus universe (editor's queue)
+// ---------------------------------------------------------------------
 
-export const enrichmentPriority = pgTable(
-  "enrichment_priority",
-  {
-    id: serial("id").primaryKey(),
-    civilizationalTag: varchar("civilizational_tag", { length: 64 }).notNull(),
-    qid: varchar("qid", { length: 32 })
-      .notNull()
-      .references(() => entities.qid, { onDelete: "cascade" }),
-    /** max(0, median_civ_count - this_civ_count); thinner civ = higher score. */
-    deficitScore: integer("deficit_score").notNull(),
-    /** 0-based rank within the civ-bucket, ordered by inbound_link_count desc. */
-    rankInBucket: integer("rank_in_bucket").notNull(),
-    /** Tier this row is targeting: 1 (summarize) or 2 (narrate). */
-    targetTier: smallint("target_tier").notNull(),
-    computedAt: timestamp("computed_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [
-    index("enrichment_priority_civ_idx").on(t.civilizationalTag),
-    index("enrichment_priority_target_idx").on(t.targetTier),
-    index("enrichment_priority_deficit_idx").on(t.deficitScore),
-    uniqueIndex("enrichment_priority_unique").on(
-      t.civilizationalTag,
-      t.qid,
-      t.targetTier,
-    ),
-  ],
-);
+export const seedTopics = pgTable("seed_topics", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  name: text("name").notNull(),
+  hint: text("hint"),
+  entityTypeGuess: varchar("entity_type_guess", { length: 24 }),
+  priority: smallint("priority").notNull().default(0),
+  status: varchar("status", { length: 16 }).notNull().default("pending"),
+  batchLabel: varchar("batch_label", { length: 64 }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  lastAttemptedAt: timestamp("last_attempted_at", { withTimezone: true }),
+});
 
-// ---------------------------------------------------------------------------
-// Type exports for application code
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// featured_rotation — cached daily featured set
+// ---------------------------------------------------------------------
 
-export type Entity = typeof entities.$inferSelect;
-export type NewEntity = typeof entities.$inferInsert;
-export type Relationship = typeof relationships.$inferSelect;
-export type NewRelationship = typeof relationships.$inferInsert;
-export type Media = typeof media.$inferSelect;
-export type Source = typeof sources.$inferSelect;
-export type NewSource = typeof sources.$inferInsert;
-export type PipelineRun = typeof pipelineRuns.$inferSelect;
-export type PipelineCheckpoint = typeof pipelineCheckpoints.$inferSelect;
-export type Thread = typeof threads.$inferSelect;
-export type NewThread = typeof threads.$inferInsert;
-export type ThreadEntry = typeof threadEntries.$inferSelect;
-export type NewThreadEntry = typeof threadEntries.$inferInsert;
-export type FactCheckReview = typeof factCheckReviews.$inferSelect;
-export type NewFactCheckReview = typeof factCheckReviews.$inferInsert;
-export type FeaturedCache = typeof featuredCache.$inferSelect;
-export type NewFeaturedCache = typeof featuredCache.$inferInsert;
-export type EnrichmentPriority = typeof enrichmentPriority.$inferSelect;
-export type NewEnrichmentPriority = typeof enrichmentPriority.$inferInsert;
+export const featuredRotation = pgTable("featured_rotation", {
+  date: date("date").primaryKey(),
+  entityIds: uuidArray("entity_ids").notNull(),
+  refreshedAt: timestamp("refreshed_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// HNSW + GIN indexes that drizzle-kit can't express are applied in
+// drizzle/migrations/0001_indexes.sql.
+
+export { sql };

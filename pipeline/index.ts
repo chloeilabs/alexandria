@@ -1,82 +1,75 @@
-#!/usr/bin/env tsx
-/**
- * Main pipeline entry. Boots pg-boss, registers all workers, and runs an
- * always-on scheduler that finds Tier 0 entities and enqueues them for
- * tier upgrade.
- *
- * Run as: `pnpm pipeline`
- * Stop:   Ctrl+C (graceful — waits for in-flight jobs to finish)
- */
+// Pipeline CLI entry — runs the generator loop until queue empty or
+// --limit is hit. Usage:
+//   pnpm pipeline run [--limit N]
+//
+// Operates on whichever DATABASE_URL is set. Hit Neon by sourcing
+// .env.prod before invoking.
+
 import "../lib/env";
-import { eq, sql } from "drizzle-orm";
 
-import { db } from "../lib/db";
-import { entities } from "../lib/db/schema";
-import { boss, startQueue, stopQueue } from "./queue";
-import { QUEUE_SUMMARIZE, registerWorkers } from "./workers";
-
-const POLL_INTERVAL_MS = 60_000;
-const BATCH_PER_POLL = 50;
-
-async function enqueueTier0(): Promise<number> {
-  // Priority order: traffic > graph centrality > recency.
-  // Traffic doesn't exist yet; for now we use inbound_link_count.
-  const tier0 = await db
-    .select({ qid: entities.qid })
-    .from(entities)
-    .where(eq(entities.tier, 0))
-    .orderBy(sql`${entities.inboundLinkCount} DESC, ${entities.qid} ASC`)
-    .limit(BATCH_PER_POLL);
-
-  for (const e of tier0) {
-    // singletonKey ensures we don't double-enqueue the same QID if the
-    // previous attempt is still in-flight or scheduled.
-    await boss.send(
-      QUEUE_SUMMARIZE,
-      { qid: e.qid },
-      {
-        singletonKey: e.qid,
-        retryLimit: 5,
-        retryDelay: 300, // 5 min between retries
-        retryBackoff: true,
-      },
-    );
-  }
-
-  return tier0.length;
-}
+import { generateEntity, nextPendingSeed } from "./generate";
+import { BudgetExceeded } from "./budget";
 
 async function main(): Promise<void> {
-  console.log("Booting Alexandria pipeline…\n");
-  await startQueue();
-  await registerWorkers();
+  const args = process.argv.slice(2);
+  const cmd = args[0] ?? "run";
+  if (cmd !== "run") {
+    console.error(`unknown command: ${cmd}. usage: pnpm pipeline run [--limit N]`);
+    process.exit(1);
+  }
 
-  const initial = await enqueueTier0();
-  console.log(`[scheduler] initial: enqueued ${initial} Tier 0 entities\n`);
+  const limitFlag = args.indexOf("--limit");
+  const limit = limitFlag !== -1 ? Number(args[limitFlag + 1]) : Infinity;
+  if (Number.isNaN(limit) || limit <= 0) {
+    console.error("invalid --limit");
+    process.exit(1);
+  }
 
-  const interval = setInterval(() => {
-    enqueueTier0()
-      .then((n) => {
-        if (n > 0) console.log(`[scheduler] enqueued ${n} Tier 0 entities`);
-      })
-      .catch((err) => console.error("[scheduler]", err));
-  }, POLL_INTERVAL_MS);
+  let processed = 0;
+  let verified = 0;
+  let flagged = 0;
+  let failed = 0;
 
-  const shutdown = async (signal: NodeJS.Signals) => {
-    clearInterval(interval);
-    console.log(`\n${signal} — shutting down pipeline gracefully…`);
-    try {
-      await stopQueue();
-      await db.$client.end();
-    } catch (err) {
-      console.error("Error during shutdown:", err);
+  while (processed < limit) {
+    const seed = await nextPendingSeed();
+    if (!seed) {
+      console.log(`[pipeline] queue empty after ${processed} seeds`);
+      break;
     }
-    process.exit(0);
-  };
-  process.on("SIGINT", () => void shutdown("SIGINT"));
-  process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-  console.log("Pipeline running. Press Ctrl+C to stop.\n");
+    process.stdout.write(`[pipeline] [${processed + 1}] ${seed.name} ... `);
+
+    try {
+      const result = await generateEntity(seed);
+      processed++;
+      if (result.status === "verified") {
+        verified++;
+        console.log(`verified (consensus ${result.consensusScore.toFixed(2)})`);
+      } else if (result.status === "flagged") {
+        flagged++;
+        console.log(
+          `flagged (consensus ${result.consensusScore.toFixed(2)}, ${result.highSeverity} high-sev)`,
+        );
+      } else if (result.status === "failed") {
+        failed++;
+        console.log(`failed: ${result.error}`);
+      } else {
+        console.log(`skipped: ${result.reason}`);
+      }
+    } catch (err) {
+      if (err instanceof BudgetExceeded) {
+        console.log("BudgetExceeded — stopping");
+        console.log(err.message);
+        break;
+      }
+      failed++;
+      console.log(`error: ${(err as Error).message}`);
+    }
+  }
+
+  console.log(
+    `\n[pipeline] done. verified=${verified} flagged=${flagged} failed=${failed}`,
+  );
 }
 
 main().catch((err) => {

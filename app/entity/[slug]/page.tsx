@@ -1,112 +1,60 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
-import { EntityPage } from "@/components/entity/EntityPage";
-import { getEntityBySlug } from "@/lib/db/queries/entity";
-import { firstSentence } from "@/lib/format";
-import { APP_DESCRIPTION } from "@/lib/site";
+import { Container } from "@/components/layout/Container";
+import { EntityView } from "@/components/entity/EntityView";
+import {
+  getCitations,
+  getEntityFull,
+  getRelated,
+} from "@/lib/db/queries/entity";
 
-const BASE_URL = "https://alexandria.chloei.ai";
-
-interface PageProps {
-  params: Promise<{ slug: string }>;
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
-}: PageProps): Promise<Metadata> {
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
   const { slug } = await params;
-  const data = await getEntityBySlug(slug);
-  if (!data) return { title: "Not found" };
-  const description =
-    data.entity.summary?.slice(0, 160) ?? `Read about ${data.entity.name}.`;
+  const entity = await getEntityFull(slug);
+  if (!entity) return { title: "Not found · Alexandria" };
   return {
-    title: `${data.entity.name} · Alexandria`,
-    description,
-    openGraph: {
-      title: data.entity.name,
-      description,
-      type: "article",
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: data.entity.name,
-      description,
-    },
+    title: `${entity.canonicalName} · Alexandria`,
+    description: entity.shortDescription,
   };
 }
 
-export default async function EntityRoute({ params }: PageProps) {
+export default async function EntityPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
   const { slug } = await params;
-  const data = await getEntityBySlug(slug);
-  if (!data) notFound();
+  const entity = await getEntityFull(slug);
+  if (!entity) notFound();
 
-  // schema.org Article JSON-LD. Improves Google's rich-result eligibility
-  // and gives LLM-based search tools structured signals about the entry
-  // (named entity, dates, sources). Inlined as a single application/ld+json
-  // script tag — standard pattern, no client JS, no perf cost.
-  const ldJson = buildArticleLd(data, slug);
+  const [related, citations] = await Promise.all([
+    getRelated({ entityId: entity.id }),
+    getCitations(entity.id),
+  ]);
 
   return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(ldJson) }}
-      />
-      <EntityPage data={data} />
-    </>
+    <main className="py-12">
+      <Container>
+        <EntityView
+          entity={entity}
+          related={related}
+          citations={citations.map((c) => ({
+            claimExcerpt: c.claimExcerpt,
+            claimedSource: c.claimedSource,
+            claimedUrl: c.claimedUrl,
+            claimedAuthor: c.claimedAuthor,
+            claimKind: c.claimKind,
+            verifiedBySecondModel: c.verifiedBySecondModel,
+          }))}
+        />
+      </Container>
+    </main>
   );
-}
-
-function buildArticleLd(
-  data: NonNullable<Awaited<ReturnType<typeof getEntityBySlug>>>,
-  slug: string,
-): Record<string, unknown> {
-  const { entity, sources, media } = data;
-  const headline = entity.name;
-  const description =
-    entity.summary
-      ? firstSentence(entity.summary, 200)
-      : `An entry in Alexandria. ${APP_DESCRIPTION}`;
-  const url = `${BASE_URL}/entity/${slug}`;
-
-  // datePublished — use tier_upgraded_at if available, else updatedAt.
-  // Both are real timestamps in our DB.
-  const datePublished = (entity.tierUpgradedAt ?? entity.updatedAt).toISOString();
-
-  // image — first media url if present. Schema.org wants absolute URLs.
-  const image = media[0]?.url;
-
-  // citation — source URLs we built the narrative from.
-  const citation = sources
-    .map((s) => s.url)
-    .filter((u): u is string => Boolean(u));
-
-  return {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    headline,
-    description,
-    url,
-    inLanguage: "en",
-    datePublished,
-    dateModified: entity.updatedAt.toISOString(),
-    author: {
-      "@type": "Organization",
-      name: "Alexandria",
-      url: BASE_URL,
-    },
-    publisher: {
-      "@type": "Organization",
-      name: "Alexandria",
-      url: BASE_URL,
-    },
-    ...(image && { image }),
-    ...(citation.length > 0 && { citation }),
-    isAccessibleForFree: true,
-    license:
-      sources.some((s) => s.sourceKind === "wikipedia")
-        ? "https://creativecommons.org/licenses/by-sa/4.0/"
-        : undefined,
-  };
 }
