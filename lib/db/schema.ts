@@ -120,6 +120,11 @@ export const entities = pgTable(
     consensusScore: real("consensus_score").notNull().default(0),
     disagreementNotes: jsonb("disagreement_notes").notNull().default([]),
 
+    // Per-claim factuality (semantic-entropy enrichment, scored async after
+    // generation). Null until scripts/score-claims.ts has run for the entity.
+    claimFactualityScore: real("claim_factuality_score"),
+    claimsScoredAt: timestamp("claims_scored_at", { withTimezone: true }),
+
     embedding: vector("embedding", 1024),
     searchText: tsvector("search_text"),
 
@@ -223,6 +228,48 @@ export const entityTopics = pgTable(
     index("entity_topics_topic_idx").on(t.topic),
   ],
 );
+
+// ---------------------------------------------------------------------
+// entity_claims — atomic claims decomposed from the narrative, each scored
+// by semantic entropy (Farquhar et al., Nature 2024). The verifier samples
+// the generator N times on the bare question; scattered answers = high
+// entropy = likely confabulation. This is per-claim factuality, distinct
+// from the holistic consensus_score on entities.
+// ---------------------------------------------------------------------
+
+export const CLAIM_VERDICTS = [
+  "corroborated",
+  "uncertain",
+  "contradicted",
+] as const;
+export type ClaimVerdict = (typeof CLAIM_VERDICTS)[number];
+
+export const entityClaims = pgTable(
+  "entity_claims",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    entityId: uuid("entity_id")
+      .notNull()
+      .references(() => entities.id, { onDelete: "cascade" }),
+    claim: text("claim").notNull(),
+    question: text("question").notNull(),
+    nSamples: smallint("n_samples").notNull().default(0),
+    distinctAnswers: smallint("distinct_answers").notNull().default(0),
+    entropy: real("entropy").notNull().default(0),
+    verdict: varchar("verdict", { length: 16 }).notNull().default("uncertain"),
+    majorityAnswer: text("majority_answer"),
+    agreesWithClaim: boolean("agrees_with_claim").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("entity_claims_entity_idx").on(t.entityId),
+    index("entity_claims_verdict_idx").on(t.verdict),
+  ],
+);
+
+export type EntityClaim = typeof entityClaims.$inferSelect;
 
 // ---------------------------------------------------------------------
 // generation_runs — pipeline bookkeeping; budget cap reads from this

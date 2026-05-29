@@ -7,10 +7,12 @@ import {
   entities,
   entityAliases,
   entityClaimedCitations,
+  entityClaims,
   entityRelationships,
   entityTopics,
   type Entity,
   type EntityType,
+  type ClaimVerdict,
 } from "../schema";
 import { withRetry } from "../retry";
 
@@ -32,6 +34,7 @@ export interface EntityFull extends EntityStub {
   coords: { lat: number; lng: number } | null;
   generatorModel: string;
   verifierModel: string | null;
+  claimFactualityScore: number | null;
   aliases: string[];
   topics: string[];
 }
@@ -91,9 +94,44 @@ export async function getEntityFull(slugOrId: string): Promise<EntityFull | null
     generatorModel: entity.generatorModel,
     verifierModel: entity.verifierModel,
     consensusScore: entity.consensusScore,
+    claimFactualityScore: entity.claimFactualityScore,
     aliases: aliasRows.map((r) => r.alias),
     topics: topicRows.map((r) => r.topic),
   };
+}
+
+export interface EntityClaimRow {
+  claim: string;
+  verdict: ClaimVerdict;
+  entropy: number;
+  distinctAnswers: number;
+  nSamples: number;
+  majorityAnswer: string | null;
+  agreesWithClaim: boolean;
+}
+
+export async function getEntityClaims(
+  entityId: string,
+): Promise<EntityClaimRow[]> {
+  return await withRetry("getEntityClaims", async () => {
+    const rows = await db
+      .select({
+        claim: entityClaims.claim,
+        verdict: entityClaims.verdict,
+        entropy: entityClaims.entropy,
+        distinctAnswers: entityClaims.distinctAnswers,
+        nSamples: entityClaims.nSamples,
+        majorityAnswer: entityClaims.majorityAnswer,
+        agreesWithClaim: entityClaims.agreesWithClaim,
+      })
+      .from(entityClaims)
+      .where(eq(entityClaims.entityId, entityId))
+      .orderBy(desc(entityClaims.entropy), entityClaims.id);
+    return rows.map((r) => ({
+      ...r,
+      verdict: r.verdict as ClaimVerdict,
+    }));
+  });
 }
 
 export async function listByType(args: {

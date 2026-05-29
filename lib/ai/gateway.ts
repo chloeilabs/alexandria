@@ -33,12 +33,21 @@ export interface GenerateObjectUsage {
   completionTokens: number;
 }
 
+// Reasoning models (DeepSeek V4 Pro, etc.) spend output tokens on a hidden
+// reasoning trace *before* emitting the structured object. With the default
+// output cap they can burn the entire budget on reasoning and return zero
+// text tokens → NoObjectGeneratedError (observed on the claim-decomposition
+// step). A generous default cap leaves room for reasoning + the object; it's
+// only a ceiling, so non-reasoning models don't pay for it.
+const DEFAULT_MAX_OUTPUT_TOKENS = 24_000;
+
 export async function generateStructured<T>(args: {
   schema: z.ZodType<T>;
   prompt: string;
   model?: string;
   system?: string;
   temperature?: number;
+  maxOutputTokens?: number;
 }): Promise<{ object: T; usage: GenerateObjectUsage; model: string }> {
   const model = args.model ?? DEFAULT_GENERATOR;
   const result = await generateObject({
@@ -47,6 +56,8 @@ export async function generateStructured<T>(args: {
     prompt: args.prompt,
     system: args.system,
     temperature: args.temperature ?? 0.4,
+    maxOutputTokens: args.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+    maxRetries: 2,
   });
   return {
     object: result.object,
