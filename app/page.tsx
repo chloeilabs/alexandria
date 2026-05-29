@@ -4,7 +4,6 @@ import { Container } from "@/components/layout/Container";
 import { FeaturedRow } from "@/components/featured/FeaturedRow";
 import { SearchInput } from "@/components/search/SearchInput";
 import { getTodaysFeatured } from "@/lib/db/queries/featured";
-import { entitiesByIds } from "@/lib/db/queries/entity";
 import { getQualitySummary } from "@/lib/db/queries/quality";
 
 export const dynamic = "force-dynamic";
@@ -15,15 +14,15 @@ export default async function Home() {
     getQualitySummary(),
   ]);
 
-  // featured is already EntityStub[] in lib/db/queries/featured; but we
-  // pass it through entitiesByIds-style filter to keep it minimal.
-  const featuredStubs =
-    featured.length > 0 ? featured : await entitiesByIds([]);
-
   return (
     <main className="py-16">
       <Container>
         <section className="mb-16">
+          {/* The search-first hero has no visible headline, but the page
+              still needs one h1 for the document outline + SEO. */}
+          <h1 className="sr-only">
+            Alexandria — an AI-distilled knowledge base
+          </h1>
           <SearchInput />
           <p
             className="mt-5 font-display italic"
@@ -56,7 +55,7 @@ export default async function Home() {
               Browse all →
             </Link>
           </header>
-          <FeaturedRow entities={featuredStubs} />
+          <FeaturedRow entities={featured} />
         </section>
 
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
