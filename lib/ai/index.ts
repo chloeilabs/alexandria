@@ -17,12 +17,14 @@ if (!process.env.AI_GATEWAY_API_KEY && process.env.NODE_ENV !== "test") {
 // Model ids — names match Vercel AI Gateway's `/v1/models` exactly.
 export const MODEL_FLASH = "google/gemini-3.5-flash";
 export const MODEL_DEEPSEEK_V4_PRO = "deepseek/deepseek-v4-pro";
+export const MODEL_DEEPSEEK_V4_FLASH = "deepseek/deepseek-v4-flash";
 export const MODEL_CLAUDE_HAIKU = "anthropic/claude-haiku-4.5";
 
 /** USD per million tokens. Refresh via `/v1/models` on the gateway. */
 export const PRICING: Record<string, { input: number; output: number }> = {
   [MODEL_FLASH]: { input: 1.5, output: 9.0 },
   [MODEL_DEEPSEEK_V4_PRO]: { input: 0.43, output: 0.87 },
+  [MODEL_DEEPSEEK_V4_FLASH]: { input: 0.14, output: 0.28 },
   [MODEL_CLAUDE_HAIKU]: { input: 1.0, output: 5.0 },
 };
 

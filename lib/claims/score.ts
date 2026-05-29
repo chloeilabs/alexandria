@@ -16,13 +16,19 @@
 
 import { z } from "zod";
 
+import { MODEL_DEEPSEEK_V4_FLASH } from "../ai";
 import {
-  DEFAULT_GENERATOR,
   DEFAULT_VERIFIER,
   generatePlainText,
   generateStructured,
 } from "../ai/gateway";
 import type { ClaimVerdict } from "../db/schema";
+
+// Sampling uses the fast, non-reasoning sibling of the generator. We're asking
+// the same model family to recall a bare fact N times — reasoning adds latency
+// and cost without improving recall consistency. DeepSeek V4 Flash shares V4
+// Pro's training lineage, so it remains a same-family self-consistency probe.
+const DEFAULT_SAMPLE_MODEL = MODEL_DEEPSEEK_V4_FLASH;
 
 export interface ScoredClaim {
   claim: string;
@@ -128,18 +134,23 @@ export async function scoreClaim(
   usage?: UsageByModel,
 ): Promise<ScoredClaim> {
   const nSamples = opts.nSamples ?? 5;
-  const sampleModel = opts.sampleModel ?? DEFAULT_GENERATOR;
+  const sampleModel = opts.sampleModel ?? DEFAULT_SAMPLE_MODEL;
 
-  const samples: string[] = [];
-  for (let i = 0; i < nSamples; i++) {
-    const r = await generatePlainText({
-      model: sampleModel,
-      prompt: `Answer in one short factual sentence. ${question}`,
-      temperature: 0.8,
-    });
+  // Sample in parallel — the N draws are independent, so there's no reason to
+  // serialize them. Concurrency is bounded at nSamples (default 5).
+  const results = await Promise.all(
+    Array.from({ length: nSamples }, () =>
+      generatePlainText({
+        model: sampleModel,
+        prompt: `Answer in one short factual sentence. ${question}`,
+        temperature: 0.8,
+      }),
+    ),
+  );
+  const samples = results.map((r) => {
     if (usage) addUsage(usage, r.model, r.usage);
-    samples.push(r.text.trim().replace(/\s+/g, " "));
-  }
+    return r.text.trim().replace(/\s+/g, " ");
+  });
 
   const r = await generateStructured({
     model: opts.judgeModel ?? DEFAULT_VERIFIER,

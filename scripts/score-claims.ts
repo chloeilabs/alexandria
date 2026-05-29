@@ -12,7 +12,7 @@ import "../lib/env";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { entities, entityClaims } from "@/lib/db/schema";
+import { entities, entityClaims, generationRuns } from "@/lib/db/schema";
 import { withRetry } from "@/lib/db/retry";
 import { estimateCostUsd } from "@/lib/ai";
 import { scoreEntityClaims } from "@/lib/claims/score";
@@ -68,10 +68,14 @@ async function main(): Promise<void> {
         narrative: e.narrative,
       });
 
-      // Cost from accumulated usage (for the budget ledger).
+      // Cost + token totals from accumulated usage (for the budget ledger).
       let costUsd = 0;
+      let promptTokens = 0;
+      let completionTokens = 0;
       for (const [model, u] of Object.entries(result.usageByModel)) {
         costUsd += estimateCostUsd(model, u.promptTokens, u.completionTokens);
+        promptTokens += u.promptTokens;
+        completionTokens += u.completionTokens;
       }
 
       await withRetry("score:write", () =>
@@ -99,6 +103,17 @@ async function main(): Promise<void> {
               claimsScoredAt: new Date(),
             })
             .where(eq(entities.id, e.id));
+          // Log spend so the budget cap sees claim-scoring cost.
+          await tx.insert(generationRuns).values({
+            entityId: e.id,
+            jobKind: "score-claims",
+            model: "claim-scoring",
+            promptTokens,
+            completionTokens,
+            apiCostUsd: costUsd.toFixed(6),
+            status: "completed",
+            finishedAt: new Date(),
+          });
         }),
       );
 
