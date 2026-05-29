@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ProvenanceBadge } from "./ProvenanceBadge";
 import { ClaimedCitations, type ClaimedCitation } from "./ClaimedCitations";
+import { ClaimVerification, type ClaimRow } from "./ClaimVerification";
 import { RelatedPanel, type RelatedRow } from "./RelatedPanel";
 import type { EntityFull } from "@/lib/db/queries/entity";
 
@@ -8,10 +9,12 @@ export function EntityView({
   entity,
   related,
   citations,
+  claims,
 }: {
   entity: EntityFull;
   related: RelatedRow[];
   citations: ClaimedCitation[];
+  claims: ClaimRow[];
 }) {
   const paragraphs = entity.narrative
     .split(/\n{2,}/)
@@ -137,6 +140,11 @@ export function EntityView({
             </ol>
           </section>
         )}
+
+        <ClaimVerification
+          claims={claims}
+          factualityScore={entity.claimFactualityScore}
+        />
 
         <ClaimedCitations citations={citations} />
       </div>

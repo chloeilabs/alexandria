@@ -58,6 +58,39 @@ export default async function QualityPage() {
           <StatsCard label="In review" value={summary.totalReviewQueueOpen} />
         </section>
 
+        {summary.entitiesScored > 0 && (
+          <section className="mb-12">
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.24em] text-accent mb-4">
+              ¶ Claim verification (semantic entropy)
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <StatsCard
+                label="Entities scored"
+                value={summary.entitiesScored}
+                hint={`of ${summary.totalPublished}`}
+              />
+              <StatsCard
+                label="Avg claim factuality"
+                value={`${(summary.avgClaimFactuality * 100).toFixed(0)}%`}
+                hint="corroborated share"
+              />
+              <StatsCard
+                label="Contradicted claims"
+                value={summary.claimVerdicts.contradicted}
+                hint="flagged for review"
+              />
+              <StatsCard
+                label="Uncertain claims"
+                value={summary.claimVerdicts.uncertain}
+              />
+            </div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mt-3">
+              Per-claim factuality is self-consistency (Farquhar et al., Nature
+              2024), not external verification.
+            </p>
+          </section>
+        )}
+
         <section className="mb-12">
           <ConsensusHistogram byType={summary.consensusByType} />
         </section>

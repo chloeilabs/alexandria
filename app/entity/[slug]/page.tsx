@@ -5,6 +5,7 @@ import { Container } from "@/components/layout/Container";
 import { EntityView } from "@/components/entity/EntityView";
 import {
   getCitations,
+  getEntityClaims,
   getEntityFull,
   getRelated,
 } from "@/lib/db/queries/entity";
@@ -34,9 +35,10 @@ export default async function EntityPage({
   const entity = await getEntityFull(slug);
   if (!entity) notFound();
 
-  const [related, citations] = await Promise.all([
+  const [related, citations, claims] = await Promise.all([
     getRelated({ entityId: entity.id }),
     getCitations(entity.id),
+    getEntityClaims(entity.id),
   ]);
 
   return (
@@ -53,6 +55,7 @@ export default async function EntityPage({
             claimKind: c.claimKind,
             verifiedBySecondModel: c.verifiedBySecondModel,
           }))}
+          claims={claims}
         />
       </Container>
     </main>

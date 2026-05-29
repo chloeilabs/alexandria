@@ -3,7 +3,13 @@
 import { desc, eq, sql } from "drizzle-orm";
 
 import { db } from "..";
-import { entities, entityTopics, generationRuns, reviewQueue } from "../schema";
+import {
+  entities,
+  entityClaims,
+  entityTopics,
+  generationRuns,
+  reviewQueue,
+} from "../schema";
 import { withRetry } from "../retry";
 
 export interface QualitySummary {
@@ -11,6 +17,10 @@ export interface QualitySummary {
   totalFlagged: number;
   totalReviewQueueOpen: number;
   avgConsensusScore: number;
+  // Per-claim semantic-entropy enrichment (null-safe; 0 until any scored).
+  entitiesScored: number;
+  avgClaimFactuality: number;
+  claimVerdicts: { corroborated: number; uncertain: number; contradicted: number };
   consensusByType: Array<{ entityType: string; avgConsensus: number; count: number }>;
   modelCoverage: Array<{ model: string; count: number }>;
   topTopics: Array<{ topic: string; count: number }>;
@@ -30,6 +40,8 @@ export async function getQualitySummary(): Promise<QualitySummary> {
       totalsRow,
       flaggedRow,
       openReviewRow,
+      claimStatsRow,
+      verdictRows,
       consensusByType,
       modelCoverage,
       topTopics,
@@ -49,6 +61,19 @@ export async function getQualitySummary(): Promise<QualitySummary> {
         .select({ count: sql<number>`count(*)::int` })
         .from(reviewQueue)
         .where(sql`${reviewQueue.resolvedAt} IS NULL`),
+      db
+        .select({
+          scored: sql<number>`count(*) FILTER (WHERE claims_scored_at IS NOT NULL)::int`,
+          avgFactuality: sql<number>`COALESCE(AVG(claim_factuality_score) FILTER (WHERE claims_scored_at IS NOT NULL), 0)::float`,
+        })
+        .from(entities),
+      db
+        .select({
+          verdict: entityClaims.verdict,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(entityClaims)
+        .groupBy(entityClaims.verdict),
       db
         .select({
           entityType: entities.entityType,
@@ -93,12 +118,22 @@ export async function getQualitySummary(): Promise<QualitySummary> {
     ]);
 
     const totals = totalsRow[0] ?? { published: 0, avgConsensus: 0 };
+    const claimStats = claimStatsRow[0] ?? { scored: 0, avgFactuality: 0 };
+    const verdicts = { corroborated: 0, uncertain: 0, contradicted: 0 };
+    for (const r of verdictRows) {
+      if (r.verdict in verdicts) {
+        verdicts[r.verdict as keyof typeof verdicts] = r.count;
+      }
+    }
 
     return {
       totalPublished: totals.published,
       totalFlagged: flaggedRow[0]?.count ?? 0,
       totalReviewQueueOpen: openReviewRow[0]?.count ?? 0,
       avgConsensusScore: totals.avgConsensus,
+      entitiesScored: claimStats.scored,
+      avgClaimFactuality: claimStats.avgFactuality,
+      claimVerdicts: verdicts,
       consensusByType: consensusByType.map((r) => ({
         entityType: r.entityType,
         avgConsensus: r.avgConsensus,
