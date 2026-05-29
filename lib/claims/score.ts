@@ -16,19 +16,24 @@
 
 import { z } from "zod";
 
-import { MODEL_DEEPSEEK_V4_FLASH } from "../ai";
 import {
+  DEFAULT_GENERATOR,
   DEFAULT_VERIFIER,
   generatePlainText,
   generateStructured,
 } from "../ai/gateway";
 import type { ClaimVerdict } from "../db/schema";
 
-// Sampling uses the fast, non-reasoning sibling of the generator. We're asking
-// the same model family to recall a bare fact N times — reasoning adds latency
-// and cost without improving recall consistency. DeepSeek V4 Flash shares V4
-// Pro's training lineage, so it remains a same-family self-consistency probe.
-const DEFAULT_SAMPLE_MODEL = MODEL_DEEPSEEK_V4_FLASH;
+// Sampling uses the generator itself (DeepSeek V4 Pro). The entry was written
+// by it, so true semantic-entropy self-consistency means re-querying the SAME
+// model — not a cheaper sibling, whose knowledge gaps would masquerade as the
+// entry's contradictions. It's a reasoning model (slower), so we keep
+// throughput by running the N draws per claim, and a few claims, in parallel.
+const DEFAULT_SAMPLE_MODEL = DEFAULT_GENERATOR;
+
+// How many claims to score concurrently. Bounds peak gateway concurrency at
+// roughly CLAIM_CONCURRENCY × nSamples reasoning calls.
+const CLAIM_CONCURRENCY = 3;
 
 export interface ScoredClaim {
   claim: string;
@@ -189,8 +194,12 @@ export async function scoreEntityClaims(
   );
 
   const claims: ScoredClaim[] = [];
-  for (const c of decomposed) {
-    claims.push(await scoreClaim(c.claim, c.question, opts, usageByModel));
+  for (let i = 0; i < decomposed.length; i += CLAIM_CONCURRENCY) {
+    const batch = decomposed.slice(i, i + CLAIM_CONCURRENCY);
+    const scored = await Promise.all(
+      batch.map((c) => scoreClaim(c.claim, c.question, opts, usageByModel)),
+    );
+    claims.push(...scored);
   }
 
   const corroborated = claims.filter((c) => c.verdict === "corroborated").length;
