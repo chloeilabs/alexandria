@@ -85,6 +85,15 @@
     color: var(--color-foreground);
   }
 
+  /* Tailwind v4's preflight defaults buttons to cursor:default. Normalize
+     clickable controls back to a pointer cursor site-wide. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+
   ::selection {
     background: color-mix(in oklch, var(--color-accent) 35%, transparent);
     color: var(--color-foreground);

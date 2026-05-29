@@ -127,9 +127,11 @@ export function SearchInput({ initialQuery = "" }: { initialQuery?: string }) {
             background: "var(--color-background-elevated)",
             borderColor: "var(--color-border)",
           }}
-          onMouseDown={() => {
-            // Keep focus/selection alive through the click.
-            if (blurTimer.current) clearTimeout(blurTimer.current);
+          onMouseDown={(e) => {
+            // Prevent the input from blurring on mousedown so the click
+            // lands on the item instead of racing the blur-to-close timer.
+            // This is what makes a suggestion reliably navigate.
+            e.preventDefault();
           }}
         >
           {suggestions.map((s, i) => (
@@ -138,7 +140,7 @@ export function SearchInput({ initialQuery = "" }: { initialQuery?: string }) {
                 type="button"
                 onMouseEnter={() => setActive(i)}
                 onClick={() => goEntity(s)}
-                className="w-full text-left px-3 py-2.5 flex flex-col gap-0.5 transition-colors"
+                className="w-full text-left px-3 py-2.5 flex flex-col gap-0.5 transition-colors cursor-pointer"
                 style={{
                   background:
                     i === active
