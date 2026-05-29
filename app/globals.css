@@ -96,6 +96,25 @@
     color: var(--color-accent);
     font-style: italic;
   }
+
+  /* Native search-field clear button: the OS glyph can't be recolored
+     directly, so replace it with a custom ✕ rendered as a mask. The
+     mask's color comes from background-color: var(--color-accent), which
+     is theme-scoped — vermilion in light, gold in dark — so the ✕ always
+     uses the primary accent. */
+  input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 0.7em;
+    width: 0.7em;
+    margin-left: 0.5em;
+    cursor: pointer;
+    background-color: var(--color-accent);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 4 L12 12 M12 4 L4 12' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 4 L12 12 M12 4 L4 12' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+  }
 }
 
 /* ── SCRIPTORIUM utilities ──────────────────────────────────────────
