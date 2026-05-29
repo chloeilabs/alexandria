@@ -22,13 +22,15 @@ export function SearchInput({ initialQuery = "" }: { initialQuery?: string }) {
   // so firing per keystroke is fine. Aborts in-flight requests on change.
   useEffect(() => {
     const term = q.trim();
-    if (term.length < 2) {
-      setSuggestions([]);
-      setOpen(false);
-      return;
-    }
     const ctrl = new AbortController();
+    // All state updates happen inside the debounced timer, never
+    // synchronously in the effect body (avoids cascading renders).
     const t = setTimeout(async () => {
+      if (term.length < 2) {
+        setSuggestions([]);
+        setOpen(false);
+        return;
+      }
       try {
         const res = await fetch(
           `/api/search/suggest?q=${encodeURIComponent(term)}`,
