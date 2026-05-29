@@ -114,7 +114,10 @@ async function logRun(args: {
   });
 }
 
-export async function generateEntity(seed: SeedRow): Promise<GenerateResult> {
+export async function generateEntity(
+  seed: SeedRow,
+  opts: { corrections?: string[]; targetEntityId?: string } = {},
+): Promise<GenerateResult> {
   // Pre-flight budget estimate: generate + verify ~ same Flash cost,
   // embed adds a tiny Voyage charge.
   const estimateGenerate = estimateCostUsd(DEFAULT_GENERATOR, 1500, 2500);
@@ -125,7 +128,7 @@ export async function generateEntity(seed: SeedRow): Promise<GenerateResult> {
   try {
     generated = await generateStructured({
       schema: generateSchema,
-      prompt: buildGeneratePrompt(seed),
+      prompt: buildGeneratePrompt({ ...seed, corrections: opts.corrections }),
       system: generateSystem,
       model: DEFAULT_GENERATOR,
     });
@@ -222,31 +225,51 @@ export async function generateEntity(seed: SeedRow): Promise<GenerateResult> {
       );
       const now = new Date();
       const status = shouldFlag ? "flagged" : "published";
-      const [row] = await tx
-        .insert(entities)
-        .values({
-          slug: obj.slug,
-          canonicalName: obj.canonicalName,
-          disambiguator: obj.disambiguator,
-          entityType: obj.entityType,
-          status,
-          shortDescription: obj.shortDescription,
-          summary: obj.summary,
-          narrative: obj.narrative,
-          structuredFacts: obj.structuredFacts,
-          keyDates: obj.keyDates,
-          coords: obj.coords,
-          generatorModel: generated.model,
-          verifierModel: verified.model,
-          consensusScore: consensus.score,
-          disagreementNotes: verifiedDisagreements,
-          embedding: embedded.embedding,
-          publishedAt: status === "published" ? now : null,
-        })
-        .returning({ id: entities.id });
+      const writeValues = {
+        canonicalName: obj.canonicalName,
+        disambiguator: obj.disambiguator,
+        entityType: obj.entityType,
+        status,
+        shortDescription: obj.shortDescription,
+        summary: obj.summary,
+        narrative: obj.narrative,
+        structuredFacts: obj.structuredFacts,
+        keyDates: obj.keyDates,
+        coords: obj.coords,
+        generatorModel: generated.model,
+        verifierModel: verified.model,
+        consensusScore: consensus.score,
+        disagreementNotes: verifiedDisagreements,
+        embedding: embedded.embedding,
+        publishedAt: status === "published" ? now : null,
+      };
 
-      if (!row) throw new Error("entities insert returned no row");
-      const newId = row.id;
+      let newId: string;
+      if (opts.targetEntityId) {
+        // Remediation: update the existing row in place — preserve the id
+        // (so entity_relationships + featured_rotation refs stay valid) and
+        // keep the original slug (so URLs don't break). Replace side rows.
+        await tx
+          .update(entities)
+          .set({ ...writeValues, updatedAt: now })
+          .where(eq(entities.id, opts.targetEntityId));
+        newId = opts.targetEntityId;
+        await tx.delete(entityAliases).where(eq(entityAliases.entityId, newId));
+        await tx.delete(entityTopics).where(eq(entityTopics.entityId, newId));
+        await tx
+          .delete(entityClaimedCitations)
+          .where(eq(entityClaimedCitations.entityId, newId));
+        await tx
+          .delete(entityRelationships)
+          .where(eq(entityRelationships.sourceId, newId));
+      } else {
+        const [row] = await tx
+          .insert(entities)
+          .values({ slug: obj.slug, ...writeValues })
+          .returning({ id: entities.id });
+        if (!row) throw new Error("entities insert returned no row");
+        newId = row.id;
+      }
 
       if (obj.aliases.length) {
         await tx
@@ -309,10 +332,14 @@ export async function generateEntity(seed: SeedRow): Promise<GenerateResult> {
         });
       }
 
-      await tx
-        .update(seedTopics)
-        .set({ status: "done", lastAttemptedAt: now })
-        .where(eq(seedTopics.id, seed.id));
+      // Seed-driven generation marks the seed done. Remediation
+      // (targetEntityId set) has no seed row to update.
+      if (!opts.targetEntityId) {
+        await tx
+          .update(seedTopics)
+          .set({ status: "done", lastAttemptedAt: now })
+          .where(eq(seedTopics.id, seed.id));
+      }
 
       return newId;
     });
