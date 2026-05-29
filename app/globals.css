@@ -42,6 +42,8 @@
    handoff). Deep ink-blue surfaces, warm bone foreground, amber-gold
    accent. */
 .dark {
+  /* Native controls (search ✕, scrollbars, widgets) render dark-themed. */
+  color-scheme: dark;
   --color-background: oklch(0.18 0.010 250);
   --color-background-elevated: oklch(0.21 0.009 250);
   --color-foreground: oklch(0.96 0.005 80);
@@ -62,6 +64,11 @@
 
 @layer base {
   html {
+    /* Tell the browser to render native controls (search-field clear "✕",
+       scrollbars, form widgets) in the light theme. Without this they fall
+       back to the OS default — on macOS a system-blue ✕ that clashes with
+       the amber accent. `.dark` overrides this to `dark` below. */
+    color-scheme: light;
     background: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
