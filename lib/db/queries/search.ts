@@ -16,10 +16,18 @@ import type { EntityStub } from "./entity";
 const RRF_K = 60;
 const CANDIDATE_LIMIT = 60;
 
-// Typeahead suggestions: cheap prefix/substring match on names + aliases.
-// No embedding call — safe to hit on every keystroke. Uses the trigram GIN
-// indexes (entities_canonical_trgm, entity_aliases_alias_trgm) for the
-// substring ILIKEs. Prefix matches rank first, then shorter names.
+// Typeahead suggestions: cheap, typo-tolerant match on names + aliases.
+// No embedding call — safe to hit on every keystroke. Three signals,
+// ranked in this order:
+//   1. prefix match on the name        ("newt" → Newton)
+//   2. substring match on name/alias   ("evolution" → ...Revolution; alias "WW2")
+//   3. trigram word-similarity         ("einstien" → Einstein) — typo tolerance
+// pg_trgm's word_similarity finds the best-matching WORD inside the name, so
+// a misspelling matches even when buried in a multi-word title. Seq-scan over
+// the corpus is fine at this scale; the trigram GIN indexes remain available
+// if it grows large enough to need the `<%` operator.
+const FUZZY_THRESHOLD = 0.4;
+
 export async function suggestEntities(
   query: string,
   limit = 8,
@@ -42,18 +50,23 @@ export async function suggestEntities(
       SELECT e.id, e.slug, e.canonical_name, e.entity_type,
              e.short_description, e.consensus_score
       FROM entities e
+      LEFT JOIN entity_aliases a ON a.entity_id = e.id
       WHERE e.status = 'published'
-        AND (
-          e.canonical_name ILIKE ${contains}
-          OR EXISTS (
-            SELECT 1 FROM entity_aliases a
-            WHERE a.entity_id = e.id AND a.alias ILIKE ${contains}
-          )
-        )
+      GROUP BY e.id
+      HAVING bool_or(e.canonical_name ILIKE ${contains} OR a.alias ILIKE ${contains})
+          OR GREATEST(
+               word_similarity(${q}, e.canonical_name),
+               COALESCE(MAX(word_similarity(${q}, a.alias)), 0)
+             ) > ${FUZZY_THRESHOLD}
       ORDER BY
-        (e.canonical_name ILIKE ${prefix}) DESC,
+        bool_or(e.canonical_name ILIKE ${prefix}) DESC,
+        bool_or(e.canonical_name ILIKE ${contains} OR a.alias ILIKE ${contains}) DESC,
+        GREATEST(
+          word_similarity(${q}, e.canonical_name),
+          COALESCE(MAX(word_similarity(${q}, a.alias)), 0)
+        ) DESC,
         length(e.canonical_name) ASC,
-        e.canonical_name ASC
+        e.consensus_score DESC
       LIMIT ${limit}
     `);
     return rows.map((r) => ({
