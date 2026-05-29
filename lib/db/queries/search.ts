@@ -16,6 +16,57 @@ import type { EntityStub } from "./entity";
 const RRF_K = 60;
 const CANDIDATE_LIMIT = 60;
 
+// Typeahead suggestions: cheap prefix/substring match on names + aliases.
+// No embedding call — safe to hit on every keystroke. Uses the trigram GIN
+// indexes (entities_canonical_trgm, entity_aliases_alias_trgm) for the
+// substring ILIKEs. Prefix matches rank first, then shorter names.
+export async function suggestEntities(
+  query: string,
+  limit = 8,
+): Promise<EntityStub[]> {
+  // Strip LIKE wildcards so user input is matched literally.
+  const q = query.trim().replace(/[%_\\]/g, " ").trim();
+  if (q.length < 2) return [];
+  const prefix = `${q}%`;
+  const contains = `%${q}%`;
+
+  return await withRetry("suggestEntities", async () => {
+    const rows = await db.execute<{
+      id: string;
+      slug: string;
+      canonical_name: string;
+      entity_type: string;
+      short_description: string;
+      consensus_score: number;
+    }>(sql`
+      SELECT e.id, e.slug, e.canonical_name, e.entity_type,
+             e.short_description, e.consensus_score
+      FROM entities e
+      WHERE e.status = 'published'
+        AND (
+          e.canonical_name ILIKE ${contains}
+          OR EXISTS (
+            SELECT 1 FROM entity_aliases a
+            WHERE a.entity_id = e.id AND a.alias ILIKE ${contains}
+          )
+        )
+      ORDER BY
+        (e.canonical_name ILIKE ${prefix}) DESC,
+        length(e.canonical_name) ASC,
+        e.canonical_name ASC
+      LIMIT ${limit}
+    `);
+    return rows.map((r) => ({
+      id: r.id,
+      slug: r.slug,
+      canonicalName: r.canonical_name,
+      entityType: r.entity_type,
+      shortDescription: r.short_description,
+      consensusScore: r.consensus_score,
+    }));
+  });
+}
+
 export async function hybridSearch(args: {
   query: string;
   entityType?: EntityType;
