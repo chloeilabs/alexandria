@@ -17,6 +17,7 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { entities, entityClaims, generationRuns } from "@/lib/db/schema";
 import { withRetry } from "@/lib/db/retry";
+import { captureEntity, restoreEntity } from "@/lib/db/entity-snapshot";
 import { estimateCostUsd } from "@/lib/ai";
 import { generateEntity } from "../pipeline/generate";
 import { scoreEntityClaims } from "@/lib/claims/score";
@@ -95,6 +96,10 @@ async function main(): Promise<void> {
     try {
       await checkBudget(0.2);
 
+      // 0. capture full state so a worse regeneration can be rolled back —
+      //    keep-if-better makes remediation a monotonic ratchet.
+      const snapshot = await captureEntity(e.id);
+
       // 1. regenerate in place with the failed claims as corrections
       const res = await generateEntity(
         {
@@ -136,50 +141,74 @@ async function main(): Promise<void> {
         completionTokens += u.completionTokens;
       }
 
-      await withRetry("remediate:write-score", () =>
-        db.transaction(async (tx) => {
-          await tx.delete(entityClaims).where(eq(entityClaims.entityId, e.id));
-          if (scored.claims.length > 0) {
-            await tx.insert(entityClaims).values(
-              scored.claims.map((c) => ({
-                entityId: e.id,
-                claim: c.claim,
-                question: c.question,
-                nSamples: c.nSamples,
-                distinctAnswers: c.distinctAnswers,
-                entropy: c.entropy,
-                verdict: c.verdict,
-                majorityAnswer: c.majorityAnswer,
-                agreesWithClaim: c.agreesWithClaim,
-              })),
-            );
-          }
-          await tx
-            .update(entities)
-            .set({
-              claimFactualityScore: scored.factualityScore,
-              claimsScoredAt: new Date(),
-            })
-            .where(eq(entities.id, e.id));
-          await tx.insert(generationRuns).values({
+      const after = scored.factualityScore;
+
+      if (after >= before) {
+        // Keep: the regeneration is at least as good. Commit the new claims.
+        await withRetry("remediate:write-score", () =>
+          db.transaction(async (tx) => {
+            await tx
+              .delete(entityClaims)
+              .where(eq(entityClaims.entityId, e.id));
+            if (scored.claims.length > 0) {
+              await tx.insert(entityClaims).values(
+                scored.claims.map((c) => ({
+                  entityId: e.id,
+                  claim: c.claim,
+                  question: c.question,
+                  nSamples: c.nSamples,
+                  distinctAnswers: c.distinctAnswers,
+                  entropy: c.entropy,
+                  verdict: c.verdict,
+                  majorityAnswer: c.majorityAnswer,
+                  agreesWithClaim: c.agreesWithClaim,
+                })),
+              );
+            }
+            await tx
+              .update(entities)
+              .set({
+                claimFactualityScore: scored.factualityScore,
+                claimsScoredAt: new Date(),
+              })
+              .where(eq(entities.id, e.id));
+            await tx.insert(generationRuns).values({
+              entityId: e.id,
+              jobKind: "remediate-score",
+              model: "claim-scoring",
+              promptTokens,
+              completionTokens,
+              apiCostUsd: costUsd.toFixed(6),
+              status: "completed",
+              finishedAt: new Date(),
+            });
+          }),
+        );
+        const delta = after - before;
+        const arrow = delta > 0 ? "↑" : "→";
+        console.log(
+          `${(after * 100).toFixed(0)}% ${arrow} (${delta >= 0 ? "+" : ""}${(delta * 100).toFixed(0)}pts)`,
+        );
+      } else {
+        // Worse — roll back to the captured original, fully. Still log the
+        // (spent) generation cost so the budget ledger stays accurate.
+        await restoreEntity(snapshot);
+        await withRetry("remediate:log-rollback", () =>
+          db.insert(generationRuns).values({
             entityId: e.id,
-            jobKind: "remediate-score",
+            jobKind: "remediate-rollback",
             model: "claim-scoring",
             promptTokens,
             completionTokens,
             apiCostUsd: costUsd.toFixed(6),
             status: "completed",
             finishedAt: new Date(),
-          });
-        }),
-      );
-
-      const after = scored.factualityScore;
-      const delta = after - before;
-      const arrow = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
-      console.log(
-        `${(after * 100).toFixed(0)}% ${arrow} (${delta >= 0 ? "+" : ""}${(delta * 100).toFixed(0)}pts)`,
-      );
+          }),
+        );
+        console.log(
+          `${(after * 100).toFixed(0)}% < ${(before * 100).toFixed(0)}% — rolled back, kept original`,
+        );
+      }
     } catch (err) {
       if (err instanceof BudgetExceeded) {
         console.log(`\nBudgetExceeded — stopping. ${err.message}`);
