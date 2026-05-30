@@ -3,7 +3,7 @@
 // remediation pass to roll back a regeneration that came out worse
 // (keep-if-better), so remediation can only ever improve or no-op.
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from ".";
 import {
@@ -12,6 +12,7 @@ import {
   entityClaimedCitations,
   entityClaims,
   entityTopics,
+  reviewQueue,
 } from "./schema";
 
 export interface EntitySnapshot {
@@ -20,6 +21,9 @@ export interface EntitySnapshot {
   topics: string[];
   citations: (typeof entityClaimedCitations.$inferSelect)[];
   claims: (typeof entityClaims.$inferSelect)[];
+  // Open review-queue rows. Captured so a rollback removes any rows a
+  // flagged regeneration inserted (otherwise they orphan).
+  openReviews: (typeof reviewQueue.$inferSelect)[];
 }
 
 export async function captureEntity(id: string): Promise<EntitySnapshot> {
@@ -30,7 +34,7 @@ export async function captureEntity(id: string): Promise<EntitySnapshot> {
     .limit(1);
   if (!entity) throw new Error(`captureEntity: no entity ${id}`);
 
-  const [aliases, topics, citations, claims] = await Promise.all([
+  const [aliases, topics, citations, claims, openReviews] = await Promise.all([
     db
       .select({ alias: entityAliases.alias })
       .from(entityAliases)
@@ -44,6 +48,10 @@ export async function captureEntity(id: string): Promise<EntitySnapshot> {
       .from(entityClaimedCitations)
       .where(eq(entityClaimedCitations.entityId, id)),
     db.select().from(entityClaims).where(eq(entityClaims.entityId, id)),
+    db
+      .select()
+      .from(reviewQueue)
+      .where(and(eq(reviewQueue.entityId, id), isNull(reviewQueue.resolvedAt))),
   ]);
 
   return {
@@ -52,6 +60,7 @@ export async function captureEntity(id: string): Promise<EntitySnapshot> {
     topics: topics.map((t) => t.topic),
     citations,
     claims,
+    openReviews,
   };
 }
 
@@ -103,6 +112,17 @@ export async function restoreEntity(snap: EntitySnapshot): Promise<void> {
     await tx.delete(entityClaims).where(eq(entityClaims.entityId, id));
     if (snap.claims.length) {
       await tx.insert(entityClaims).values(snap.claims.map(({ id: _clid, ...c }) => c));
+    }
+
+    // Remove any open review rows a flagged regeneration added, then restore
+    // the originally-open ones (usually none for a weak-but-unflagged entity).
+    await tx
+      .delete(reviewQueue)
+      .where(and(eq(reviewQueue.entityId, id), isNull(reviewQueue.resolvedAt)));
+    if (snap.openReviews.length) {
+      await tx
+        .insert(reviewQueue)
+        .values(snap.openReviews.map(({ id: _rid, ...r }) => r));
     }
   });
 }
