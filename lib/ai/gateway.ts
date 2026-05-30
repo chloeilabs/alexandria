@@ -8,7 +8,13 @@
 // package — fewer dependencies and no separate version to keep in sync.
 
 import "../env";
-import { embed as aiEmbed, gateway, generateObject, generateText } from "ai";
+import {
+  embed as aiEmbed,
+  gateway,
+  generateObject,
+  generateText,
+  NoObjectGeneratedError,
+} from "ai";
 import type { z } from "zod";
 
 import {
@@ -48,25 +54,49 @@ export async function generateStructured<T>(args: {
   system?: string;
   temperature?: number;
   maxOutputTokens?: number;
+  /**
+   * If the primary model returns NoObjectGeneratedError (a reasoning model
+   * burning its whole output budget on the reasoning trace), retry once with
+   * this model. Pick a non-reasoning sibling so the cross-family invariant
+   * still holds against the verifier (e.g. deepseek-v4-flash for a
+   * deepseek-v4-pro generator + claude-haiku verifier).
+   */
+  fallbackModel?: string;
 }): Promise<{ object: T; usage: GenerateObjectUsage; model: string }> {
-  const model = args.model ?? DEFAULT_GENERATOR;
-  const result = await generateObject({
-    model: gateway(model),
-    schema: args.schema,
-    prompt: args.prompt,
-    system: args.system,
-    temperature: args.temperature ?? 0.4,
-    maxOutputTokens: args.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-    maxRetries: 2,
-  });
-  return {
-    object: result.object,
-    usage: {
-      promptTokens: result.usage?.inputTokens ?? 0,
-      completionTokens: result.usage?.outputTokens ?? 0,
-    },
-    model,
+  const primary = args.model ?? DEFAULT_GENERATOR;
+
+  const runWith = async (modelId: string) => {
+    const result = await generateObject({
+      model: gateway(modelId),
+      schema: args.schema,
+      prompt: args.prompt,
+      system: args.system,
+      temperature: args.temperature ?? 0.4,
+      maxOutputTokens: args.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      maxRetries: 2,
+    });
+    return {
+      object: result.object,
+      usage: {
+        promptTokens: result.usage?.inputTokens ?? 0,
+        completionTokens: result.usage?.outputTokens ?? 0,
+      },
+      model: modelId,
+    };
   };
+
+  try {
+    return await runWith(primary);
+  } catch (err) {
+    if (
+      args.fallbackModel &&
+      args.fallbackModel !== primary &&
+      NoObjectGeneratedError.isInstance(err)
+    ) {
+      return await runWith(args.fallbackModel);
+    }
+    throw err;
+  }
 }
 
 export async function generatePlainText(args: {
