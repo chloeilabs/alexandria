@@ -50,3 +50,6 @@ dumps/
 
 # Calibration / bake-off output (regenerable from scripts)
 calibration-*.md
+
+# Local env backups (contain secrets — never commit)
+.env.local.*
