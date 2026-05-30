@@ -121,6 +121,7 @@ async function main(): Promise<void> {
           .select({
             canonicalName: entities.canonicalName,
             narrative: entities.narrative,
+            consensusScore: entities.consensusScore,
           })
           .from(entities)
           .where(eq(entities.id, e.id))
@@ -142,9 +143,17 @@ async function main(): Promise<void> {
       }
 
       const after = scored.factualityScore;
+      // Guard BOTH signals. Semantic-entropy (claim factuality) measures the
+      // generator's self-consistency; cross-family consensus catches errors
+      // the generator is confidently wrong about. Keep only if neither drops
+      // — otherwise remediation could trade correctness for self-consistency
+      // (observed: The Analects 0.75 claim-factual but consensus 0.20).
+      const oldConsensus = snapshot.entity.consensusScore;
+      const newConsensus = fresh.consensusScore;
+      const keep = after >= before && newConsensus >= oldConsensus;
 
-      if (after >= before) {
-        // Keep: the regeneration is at least as good. Commit the new claims.
+      if (keep) {
+        // Keep: the regeneration is at least as good on both signals.
         await withRetry("remediate:write-score", () =>
           db.transaction(async (tx) => {
             await tx
@@ -205,9 +214,11 @@ async function main(): Promise<void> {
             finishedAt: new Date(),
           }),
         );
-        console.log(
-          `${(after * 100).toFixed(0)}% < ${(before * 100).toFixed(0)}% — rolled back, kept original`,
-        );
+        const reason =
+          after < before
+            ? `factuality ${(after * 100).toFixed(0)}% < ${(before * 100).toFixed(0)}%`
+            : `consensus ${newConsensus.toFixed(2)} < ${oldConsensus.toFixed(2)}`;
+        console.log(`rolled back (${reason}), kept original`);
       }
     } catch (err) {
       if (err instanceof BudgetExceeded) {
