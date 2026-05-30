@@ -5,6 +5,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { db } from "..";
 import {
   entities,
+  entityClaimedCitations,
   entityClaims,
   entityTopics,
   generationRuns,
@@ -21,6 +22,8 @@ export interface QualitySummary {
   entitiesScored: number;
   avgClaimFactuality: number;
   claimVerdicts: { corroborated: number; uncertain: number; contradicted: number };
+  // External grounding of LLM-claimed citations (CrossRef/OpenAlex).
+  citations: { total: number; verified: number; ambiguous: number; notFound: number };
   consensusByType: Array<{ entityType: string; avgConsensus: number; count: number }>;
   modelCoverage: Array<{ model: string; count: number }>;
   topTopics: Array<{ topic: string; count: number }>;
@@ -42,6 +45,7 @@ export async function getQualitySummary(): Promise<QualitySummary> {
       openReviewRow,
       claimStatsRow,
       verdictRows,
+      citationStatsRow,
       consensusByType,
       modelCoverage,
       topTopics,
@@ -74,6 +78,14 @@ export async function getQualitySummary(): Promise<QualitySummary> {
         })
         .from(entityClaims)
         .groupBy(entityClaims.verdict),
+      db
+        .select({
+          total: sql<number>`count(*)::int`,
+          verified: sql<number>`count(*) FILTER (WHERE resolution_status='verified')::int`,
+          ambiguous: sql<number>`count(*) FILTER (WHERE resolution_status='ambiguous')::int`,
+          notFound: sql<number>`count(*) FILTER (WHERE resolution_status='not_found')::int`,
+        })
+        .from(entityClaimedCitations),
       db
         .select({
           entityType: entities.entityType,
@@ -134,6 +146,12 @@ export async function getQualitySummary(): Promise<QualitySummary> {
       entitiesScored: claimStats.scored,
       avgClaimFactuality: claimStats.avgFactuality,
       claimVerdicts: verdicts,
+      citations: citationStatsRow[0] ?? {
+        total: 0,
+        verified: 0,
+        ambiguous: 0,
+        notFound: 0,
+      },
       consensusByType: consensusByType.map((r) => ({
         entityType: r.entityType,
         avgConsensus: r.avgConsensus,
