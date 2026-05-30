@@ -110,12 +110,22 @@ export function buildGeneratePrompt(seed: {
   name: string;
   hint: string | null;
   entityTypeGuess: string | null;
+  corrections?: string[];
 }): string {
   const guess = seed.entityTypeGuess
     ? `\nLikely type: ${seed.entityTypeGuess}.`
     : "";
   const hint = seed.hint ? `\nContext: ${seed.hint}` : "";
-  return `Write an encyclopedia entry for: ${seed.name}.${guess}${hint}
+  // Remediation: claims a prior version got wrong (flagged by cross-family
+  // verification + self-consistency). Steer the model to get these right
+  // without simply parroting the correction.
+  const corrections =
+    seed.corrections && seed.corrections.length
+      ? `\n\nA prior version of this entry contained statements that failed verification. Take particular care to be accurate on these points; state only what you are confident is true, and omit rather than guess:\n${seed.corrections
+          .map((c) => `- ${c}`)
+          .join("\n")}`
+      : "";
+  return `Write an encyclopedia entry for: ${seed.name}.${guess}${hint}${corrections}
 
 Constraints:
 - Tone: neutral, factual, encyclopedia-style. Past tense for historical subjects.
