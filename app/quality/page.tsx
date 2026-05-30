@@ -91,6 +91,38 @@ export default async function QualityPage() {
           </section>
         )}
 
+        {summary.citations.total > 0 && (
+          <section className="mb-12">
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.24em] text-accent mb-4">
+              ¶ Citation grounding (CrossRef / OpenAlex)
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <StatsCard
+                label="Claimed citations"
+                value={summary.citations.total}
+              />
+              <StatsCard
+                label="Verified"
+                value={`${((summary.citations.verified / summary.citations.total) * 100).toFixed(0)}%`}
+                hint="resolve + author match"
+              />
+              <StatsCard
+                label="Ambiguous"
+                value={summary.citations.ambiguous}
+                hint="title-only match"
+              />
+              <StatsCard
+                label="Not found"
+                value={summary.citations.notFound}
+              />
+            </div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mt-3">
+              Resolution confirms the cited work exists, not that the entry
+              cites it accurately.
+            </p>
+          </section>
+        )}
+
         <section className="mb-12">
           <ConsensusHistogram byType={summary.consensusByType} />
         </section>

@@ -191,6 +191,18 @@ export const entityRelationships = pgTable(
 // entity_claimed_citations — LLM-claimed, NOT externally verified
 // ---------------------------------------------------------------------
 
+// External-grounding resolution status. The citation text is LLM-claimed;
+// resolution checks whether it corresponds to a real work in CrossRef /
+// OpenAlex. "verified" = strong title + author match; "ambiguous" = title
+// match without author corroboration; "not_found" = no match.
+export const CITATION_RESOLUTIONS = [
+  "unchecked",
+  "verified",
+  "ambiguous",
+  "not_found",
+] as const;
+export type CitationResolution = (typeof CITATION_RESOLUTIONS)[number];
+
 export const entityClaimedCitations = pgTable(
   "entity_claimed_citations",
   {
@@ -206,8 +218,22 @@ export const entityClaimedCitations = pgTable(
     verifiedBySecondModel: boolean("verified_by_second_model")
       .notNull()
       .default(false),
+
+    // External grounding (CrossRef / OpenAlex). Null/unchecked until resolved.
+    resolutionStatus: varchar("resolution_status", { length: 16 })
+      .notNull()
+      .default("unchecked"),
+    resolvedTitle: text("resolved_title"),
+    resolvedDoi: text("resolved_doi"),
+    resolvedUrl: text("resolved_url"),
+    resolutionConfidence: real("resolution_confidence"),
+    resolvedVia: varchar("resolved_via", { length: 16 }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
-  (t) => [index("entity_citations_entity_idx").on(t.entityId)],
+  (t) => [
+    index("entity_citations_entity_idx").on(t.entityId),
+    index("entity_citations_resolution_idx").on(t.resolutionStatus),
+  ],
 );
 
 // ---------------------------------------------------------------------

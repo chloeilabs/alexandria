@@ -54,6 +54,9 @@ export default async function EntityPage({
             claimedAuthor: c.claimedAuthor,
             claimKind: c.claimKind,
             verifiedBySecondModel: c.verifiedBySecondModel,
+            resolutionStatus: c.resolutionStatus,
+            resolvedDoi: c.resolvedDoi,
+            resolvedUrl: c.resolvedUrl,
           }))}
           claims={claims}
         />
