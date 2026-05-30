@@ -22,6 +22,7 @@ import {
   estimateCostUsd,
   estimateEmbedCostUsd,
   roughTokensFromChars,
+  MODEL_DEEPSEEK_V4_FLASH,
 } from "@/lib/ai";
 import {
   DEFAULT_GENERATOR,
@@ -131,6 +132,9 @@ export async function generateEntity(
       prompt: buildGeneratePrompt({ ...seed, corrections: opts.corrections }),
       system: generateSystem,
       model: DEFAULT_GENERATOR,
+      // Reasoning-token exhaustion on Pro → fall back to the non-reasoning
+      // DeepSeek sibling (still cross-family vs the Haiku verifier).
+      fallbackModel: MODEL_DEEPSEEK_V4_FLASH,
     });
   } catch (err) {
     await logRun({
